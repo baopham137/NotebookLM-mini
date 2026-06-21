@@ -25,6 +25,13 @@ if %ERRORLEVEL% neq 0 (
     exit /b
 )
 
+:: 2.5 Kiem tra ffmpeg
+ffmpeg -version >nul 2>&1
+if %ERRORLEVEL% neq 0 (
+    echo [!] Canh bao: Khong tim thay ffmpeg! Tinh nang doc file am thanh se khong hoat dong.
+    echo [!] Ban co the cai dat ffmpeg hoac bo qua canh bao nay.
+)
+
 :: 3. Kiem tra va cai dat uv
 uv --version >nul 2>&1
 if %ERRORLEVEL% neq 0 (

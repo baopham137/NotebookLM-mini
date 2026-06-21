@@ -26,7 +26,7 @@ class LLMEngine:
         self.llm = None
         if self.engine == 'llama-cpp-python':
             # Khởi tạo Llama-cpp (đã test thành công ở Lớp 1/2)
-            n_gpu_layers = -1 if self.tier in [1, 2, 3] else 0
+            n_gpu_layers = -1 if (self.tier in [1, 2, 3] or manager.has_mps or manager.has_cuda) else 0
             n_ctx = 4096
             from llama_cpp import Llama
             try:

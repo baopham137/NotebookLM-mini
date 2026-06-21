@@ -33,4 +33,4 @@ EXPOSE 8000 8501
 
 # Chạy bằng script start.sh hoặc chỉ định CMD mặc định
 # CMD sẽ được override trong docker-compose.yml để chạy API hoặc UI
-CMD ["uvicorn", "src.interfaces.api:app", "--host", "0.0.0.0", "--port", "8000"]
+CMD ["uvicorn", "src.api.api:app", "--host", "0.0.0.0", "--port", "8000"]

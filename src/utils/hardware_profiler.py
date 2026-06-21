@@ -60,6 +60,18 @@ class ModelZooManager:
         except Exception:
             pass
             
+        if platform.system() == "Darwin":
+            # Apple Silicon dùng unified memory — ~75% khả dụng cho GPU
+            self.vram_gb = self.total_ram_gb * 0.75
+            try:
+                import torch
+                if hasattr(torch.backends, "mps") and torch.backends.mps.is_available():
+                    self.has_mps = True
+            except ImportError:
+                # Nếu chưa cài torch, ta vẫn ngầm định Mac M-series có MPS
+                self.has_mps = True
+            return
+            
         try:
             # 2. Thử dùng wmic trên Windows để lấy RAM của các Card khác (AMD, Intel)
             if platform.system() == "Windows":
@@ -169,14 +181,16 @@ class ModelZooManager:
 
     def setup_ollama_portable(self, model_tag: str):
         """LỚP 3: Tự động tải Ollama Portable, bật server ngầm, và pull model."""
-        print("\n[LỚP 3 - Cứu cánh] Kích hoạt chế độ tải Ollama Portable dành cho CPU cũ...")
+        print("\n[LỚP 3 - Cứu cánh] Kích hoạt chế độ tải Ollama Portable dành cho CPU cũ/Không tương thích...")
         bin_dir = os.path.join(os.getcwd(), "bin")
         os.makedirs(bin_dir, exist_ok=True)
-        ollama_exe = os.path.join(bin_dir, "ollama.exe")
+        
+        is_windows = platform.system() == "Windows"
+        ollama_exe = os.path.join(bin_dir, "ollama.exe" if is_windows else "ollama")
         
         # 1. Tải Ollama Portable nếu chưa có
         if not os.path.exists(ollama_exe):
-            print("[Lớp 3] Đang tải Ollama Portable (Khoảng 150MB). Vui lòng đợi...")
+            print("[Lớp 3] Đang tải Ollama Portable. Vui lòng đợi...")
             import urllib.request
             import zipfile
             import tempfile
@@ -189,13 +203,20 @@ class ModelZooManager:
                     sys.stdout.write(f"\r[Lớp 3] Tiến độ tải: {percent:.1f}% ({downloaded/(1024*1024):.1f}MB / {total_size/(1024*1024):.1f}MB)")
                     sys.stdout.flush()
                     
-            url = "https://ollama.com/download/ollama-windows-amd64.zip"
-            zip_path = os.path.join(tempfile.gettempdir(), "ollama_portable.zip")
-            urllib.request.urlretrieve(url, zip_path, reporthook=download_progress)
-            print("\n[Lớp 3] Đang giải nén Ollama...")
-            with zipfile.ZipFile(zip_path, 'r') as zip_ref:
-                zip_ref.extractall(bin_dir)
-            os.remove(zip_path)
+            if is_windows:
+                url = "https://ollama.com/download/ollama-windows-amd64.zip"
+                zip_path = os.path.join(tempfile.gettempdir(), "ollama_portable.zip")
+                urllib.request.urlretrieve(url, zip_path, reporthook=download_progress)
+                print("\n[Lớp 3] Đang giải nén Ollama...")
+                with zipfile.ZipFile(zip_path, 'r') as zip_ref:
+                    zip_ref.extractall(bin_dir)
+                os.remove(zip_path)
+            elif platform.system() == "Darwin":
+                # Mac M-series ARM64
+                url = "https://ollama.com/download/ollama-darwin-arm64"
+                urllib.request.urlretrieve(url, ollama_exe, reporthook=download_progress)
+                os.chmod(ollama_exe, 0o755) # Cấp quyền thực thi
+                print("\n[Lớp 3] Đã tải xong Ollama cho macOS.")
             
         # 2. Khởi động Ollama Serve ngầm nếu chưa chạy
         import urllib.request
@@ -203,8 +224,9 @@ class ModelZooManager:
             urllib.request.urlopen("http://localhost:11434", timeout=1)
         except:
             print("[Lớp 3] Đang khởi động AI Engine (Ollama)...")
-            creationflags = subprocess.CREATE_NO_WINDOW if platform.system() == "Windows" else 0
+            creationflags = subprocess.CREATE_NO_WINDOW if is_windows else 0
             env = os.environ.copy()
+            # Bật serve ngầm
             subprocess.Popen([ollama_exe, "serve"], creationflags=creationflags, env=env, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
             import time
             for _ in range(30):

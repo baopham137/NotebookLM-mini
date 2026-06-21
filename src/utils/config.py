@@ -1,4 +1,4 @@
-﻿from pathlib import Path
+from pathlib import Path
 from typing import Literal, Optional
 from functools import lru_cache
 from pydantic import Field, model_validator
@@ -96,12 +96,15 @@ class Settings(BaseSettings):
             raise ValueError("hybrid_rerank_k must be <= hybrid_initial_k.")
             
         if self.hf_device == "auto":
-            import torch
-            if torch.cuda.is_available():
-                self.hf_device = "cuda"
-            elif hasattr(torch.backends, "mps") and torch.backends.mps.is_available():
-                self.hf_device = "mps"
-            else:
+            try:
+                import torch
+                if torch.cuda.is_available():
+                    self.hf_device = "cuda"
+                elif hasattr(torch.backends, "mps") and torch.backends.mps.is_available():
+                    self.hf_device = "mps"
+                else:
+                    self.hf_device = "cpu"
+            except ImportError:
                 self.hf_device = "cpu"
                 
         return self
