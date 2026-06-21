@@ -1,0 +1,34 @@
+# Sử dụng image Python chuẩn và nhẹ
+FROM python:3.10-slim
+
+# Ngăn Python tạo ra các file .pyc và bật stdout logging ngay lập tức
+ENV PYTHONDONTWRITEBYTECODE=1
+ENV PYTHONUNBUFFERED=1
+
+# Cài đặt các thư viện hệ thống cần thiết
+RUN apt-get update && apt-get install -y \
+    build-essential \
+    curl \
+    && rm -rf /var/lib/apt/lists/*
+
+# Thiết lập thư mục làm việc
+WORKDIR /app
+
+# Cài đặt uv (Package manager siêu tốc)
+RUN pip install --no-cache-dir uv
+
+# Copy requirement và cài đặt dependencies bằng uv
+COPY requirements.txt .
+RUN uv pip install --system --no-cache --index-strategy unsafe-best-match -r requirements.txt
+
+# Copy toàn bộ mã nguồn (Source code thực tế sẽ được override bằng Volume khi dev)
+COPY . .
+
+# Tạo sẵn các thư mục data và storage
+RUN mkdir -p data storage/qdrant storage/bm25 logs uploads
+
+# Mở port 8000 cho FastAPI
+EXPOSE 8000
+
+# Chạy Uvicorn với cờ --reload (sẽ hoạt động tốt khi mount Volume)
+CMD ["uvicorn", "src.api.api:app", "--host", "0.0.0.0", "--port", "8000", "--reload", "--reload-dir", "src"]

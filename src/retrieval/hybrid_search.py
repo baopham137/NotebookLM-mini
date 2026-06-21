@@ -93,7 +93,7 @@ class HybridSearcher:
     """
     def __init__(self, vector_store: VectorStoreManager):
         self.vector_store = vector_store
-        self.reranker = CrossEncoderReranker()
+        self.reranker = CrossEncoderReranker() if settings.use_reranker and settings.reranker_model != "None" else None
 
     def search(
         self,
@@ -118,7 +118,10 @@ class HybridSearcher:
         # Combine bằng RRF
         fused = _reciprocal_rank_fusion(semantic_results, bm25_results)
         
-        # Chấm điểm lại (Reranking)
-        final_results = self.reranker.rerank(query, fused, top_k=k)
-        
+        # Chấm điểm lại (Reranking) nếu được bật
+        if self.reranker:
+            final_results = self.reranker.rerank(query, fused, top_k=k)
+        else:
+            final_results = fused[:k]
+            
         return final_results

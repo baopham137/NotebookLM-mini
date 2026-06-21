@@ -1,0 +1,20 @@
+# Sử dụng Node.js bản alpine cho nhẹ
+FROM node:20-alpine
+
+# Thiết lập thư mục làm việc
+WORKDIR /app
+
+# Copy các file cấu hình package trước để tận dụng cache
+COPY package.json package-lock.json* ./
+
+# Cài đặt thư viện
+RUN npm install
+
+# Copy phần còn lại của code
+COPY . .
+
+# Mở port 5173 (Mặc định của Vite)
+EXPOSE 5173
+
+# Khởi động Vite với cờ --host để có thể truy cập từ bên ngoài Docker
+CMD ["npm", "run", "dev", "--", "--host"]

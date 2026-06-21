@@ -37,6 +37,8 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+import threading
+
 # Global Instances (Lazy load)
 embedder = None
 vector_store = None
@@ -44,6 +46,11 @@ search_engine = None
 llm_engine = None
 session_manager = None
 query_rewriter = None
+
+embedder_lock = threading.Lock()
+vector_store_lock = threading.Lock()
+search_engine_lock = threading.Lock()
+llm_engine_lock = threading.Lock()
 
 # Cache LRU + TTL: Tối đa 200 câu hỏi, tự động xóa sau 60 phút (3600 giây) không truy cập
 _QUERY_CACHE = TTLCache(maxsize=200, ttl=3600)
@@ -69,25 +76,33 @@ def startup_event():
 def get_embedder():
     global embedder
     if embedder is None:
-        embedder = LocalEmbedder()
+        with embedder_lock:
+            if embedder is None:
+                embedder = LocalEmbedder()
     return embedder
 
 def get_vector_store():
     global vector_store
     if vector_store is None:
-        vector_store = VectorStoreManager(embedder=get_embedder())
+        with vector_store_lock:
+            if vector_store is None:
+                vector_store = VectorStoreManager(embedder=get_embedder())
     return vector_store
 
 def get_search_engine():
     global search_engine
     if search_engine is None:
-        search_engine = SearchEngine(vector_store=get_vector_store())
+        with search_engine_lock:
+            if search_engine is None:
+                search_engine = SearchEngine(vector_store=get_vector_store())
     return search_engine
 
 def get_llm_engine():
     global llm_engine
     if llm_engine is None:
-        llm_engine = LLMEngine()
+        with llm_engine_lock:
+            if llm_engine is None:
+                llm_engine = LLMEngine()
     return llm_engine
 
 class NotebookCreate(BaseModel):
@@ -124,9 +139,12 @@ def delete_document(notebook_id: str, filename: str):
     store = get_vector_store()
     store.delete_document_chunks(notebook_id, filename)
     
+    # Xóa khỏi BM25
     bm25_index = get_bm25_index(notebook_id)
-    bm25_index.remove_document(filename)
-    bm25_index.save()
+    with bm25_index.transaction():
+        bm25_index.load()
+        bm25_index.remove_document(filename)
+        bm25_index.save()
     
     # Nếu thẻ không còn tài liệu nào → xóa Cẩm nang hồn ma
     remaining_docs = session_manager.get_documents(notebook_id)
@@ -282,8 +300,42 @@ def _index_all_chunks(notebook_id: str, chunks: list):
             metadata=chunk["metadata"]
         ) for chunk in chunks
     ]
-    bm25_index.add_documents(bm25_docs)
-    bm25_index.save()
+    with bm25_index.transaction():
+        bm25_index.load()
+        bm25_index.add_documents(bm25_docs)
+        bm25_index.save()
+
+def process_document_bg(notebook_id: str, tree, filename: str, is_private: bool, api_key: Optional[str]):
+    try:
+        chunker = AdaptiveChunker(embedder=get_embedder())
+        chunks = chunker.process_document(tree)
+        
+        for chunk in chunks:
+            chunk["metadata"]["notebook_id"] = notebook_id
+            chunk["metadata"]["filename"] = filename
+        
+        _index_all_chunks(notebook_id, chunks)
+        
+        # Cập nhật trạng thái thành công
+        session_manager.update_document_status(notebook_id, filename, "ready")
+        
+        document_text = "\n\n".join([chunk["content"] for chunk in chunks])
+        
+        # Sinh Study Guide ngầm
+        llm = get_llm_engine()
+        guide_gen = GuideGenerator(llm, session_manager)
+        guide_gen.generate(
+            notebook_id, 
+            document_text, 
+            is_private=is_private,
+            gemini_api_key=api_key
+        )
+        
+        clear_cache(notebook_id)
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        session_manager.update_document_status(notebook_id, filename, "error")
 
 @app.post("/api/ingest/url")
 async def ingest_url(background_tasks: BackgroundTasks, notebook_id: str = Form(...), url: str = Form(...)):
@@ -293,35 +345,23 @@ async def ingest_url(background_tasks: BackgroundTasks, notebook_id: str = Form(
     tree.metadata["notebook_id"] = notebook_id
     
     filename = tree.metadata.get("title", url)
-    chunker = AdaptiveChunker(embedder=get_embedder())
-    chunks = chunker.process_document(tree)
     
-    for chunk in chunks:
-        chunk["metadata"]["notebook_id"] = notebook_id
-        chunk["metadata"]["filename"] = filename
+    session_manager.add_document(notebook_id, filename, status="processing")
     
-    _index_all_chunks(notebook_id, chunks)
-    
-    session_manager.add_document(notebook_id, filename)
-    
-    document_text = "\n\n".join([chunk["content"] for chunk in chunks])
     notebook = session_manager.get_notebook(notebook_id)
     is_private = notebook.get('is_private', True) if notebook else True
     api_key = notebook.get('gemini_api_key') if notebook else None
 
-    # Sinh Study Guide ngầm
-    llm = get_llm_engine()
-    guide_gen = GuideGenerator(llm, session_manager)
     background_tasks.add_task(
-        guide_gen.generate, 
+        process_document_bg, 
         notebook_id, 
-        document_text, 
-        is_private=is_private,
-        gemini_api_key=api_key
+        tree, 
+        filename, 
+        is_private, 
+        api_key
     )
     
-    clear_cache(notebook_id)
-    return {"status": "success", "chunks_indexed": len(chunks)}
+    return {"status": "success", "message": "URL is processing in background"}
 
 @app.post("/api/ingest/upload")
 async def upload_file(
@@ -354,36 +394,24 @@ async def upload_file(
         tree = parser.parse(file_path)
     
     tree.metadata["notebook_id"] = notebook_id
+    filename = file.filename
     
-    chunker = AdaptiveChunker(embedder=get_embedder())
-    chunks = chunker.process_document(tree)
+    session_manager.add_document(notebook_id, filename, status="processing")
     
-    for chunk in chunks:
-        chunk["metadata"]["notebook_id"] = notebook_id
-        chunk["metadata"]["filename"] = file.filename
-    
-    _index_all_chunks(notebook_id, chunks)
-    
-    session_manager.add_document(notebook_id, file.filename)
-    
-    document_text = "\n\n".join([chunk["content"] for chunk in chunks])
     notebook = session_manager.get_notebook(notebook_id)
     is_private = notebook.get('is_private', True) if notebook else True
     api_key = notebook.get('gemini_api_key') if notebook else None
 
-    # Sinh Study Guide ngầm
-    llm = get_llm_engine()
-    guide_gen = GuideGenerator(llm, session_manager)
     background_tasks.add_task(
-        guide_gen.generate, 
+        process_document_bg, 
         notebook_id, 
-        document_text, 
-        is_private=is_private,
-        gemini_api_key=api_key
+        tree, 
+        filename, 
+        is_private, 
+        api_key
     )
     
-    clear_cache(notebook_id)
-    return {"status": "success", "chunks_indexed": len(chunks)}
+    return {"status": "success", "message": "File is processing in background"}
 
 @app.post("/api/podcast/generate")
 async def generate_podcast(background_tasks: BackgroundTasks, notebook_id: str = Form(...)):

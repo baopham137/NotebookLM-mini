@@ -72,8 +72,10 @@ class Settings(BaseSettings):
     # --- NEW: Hybrid Search & Reranking ---
     hybrid_initial_k: int = Field(default=15, ge=1, le=100)
     hybrid_rerank_k: int = Field(default=5, ge=1, le=50)
+    use_reranker: bool = True
     reranker_model: str = "BAAI/bge-reranker-v2-m3"
     bm25_top_k: int = Field(default=15, ge=1, le=100)
+    ollama_base_url: str = "http://localhost:11434"
 
     # --- NEW: Stream Batching ---
     stream_buffer_ms: int = Field(default=50, ge=10, le=500)

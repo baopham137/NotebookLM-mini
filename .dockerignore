@@ -17,9 +17,15 @@ data/*
 !data/.gitkeep
 storage/*
 !storage/.gitkeep
+logs/*
+uploads/*
+
+# Frontend
+frontend/
 
 # Other
 *.md
 Dockerfile
+Dockerfile.backend
 .dockerignore
 docker-compose.yml

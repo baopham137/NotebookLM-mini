@@ -57,8 +57,3 @@ google-genai>=0.1.0
 # PDF Image Extraction
 PyMuPDF>=1.24.0
 pyarrow<15.0.0
-# --- PyTorch CPU-Only (Diet Plan) ---
---extra-index-url https://download.pytorch.org/whl/cpu
-torch==2.6.0+cpu
-torchvision==0.21.0+cpu
-torchaudio==2.6.0+cpu

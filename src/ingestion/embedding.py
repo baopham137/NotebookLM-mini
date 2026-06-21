@@ -6,8 +6,7 @@ class LocalEmbedder:
     """Quản lý Embedding Model với khả năng tự động chọn Device theo Hardware Profiler."""
     
     def __init__(self, model_name: str = None):
-        # Ưu tiên lấy model từ tham số, nếu không thì lấy mặc định (ví dụ BAAI/bge-m3)
-        self.model_name = model_name or "BAAI/bge-m3"
+        self.model_name = model_name or getattr(settings, "embedding_model", "keepitreal/vietnamese-sbert")
         self.device = settings.hf_device if settings.hf_device != "auto" else None
         
         print(f"[LocalEmbedder] Đang tải mô hình {self.model_name} lên thiết bị: {self.device}")

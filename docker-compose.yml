@@ -14,14 +14,20 @@ services:
       retries: 3
     restart: unless-stopped
 
-  api:
-    build: .
-    container_name: llm_mini_api
+  backend:
+    build: 
+      context: .
+      dockerfile: Dockerfile.backend
+    container_name: llm_mini_backend
+    command: uvicorn src.api.api:app --host 0.0.0.0 --port 8000 --reload --reload-dir src
     ports:
       - "8000:8000"
     volumes:
+      - ./src:/app/src
       - ./data:/app/data
       - ./storage:/app/storage
+      - ./logs:/app/logs
+      - ./uploads:/app/uploads
     env_file:
       - .env
     environment:
@@ -29,24 +35,24 @@ services:
     depends_on:
       redis:
         condition: service_healthy
-    command: uvicorn src.interfaces.api:app --host 0.0.0.0 --port 8000
     restart: unless-stopped
 
-  ui:
-    build: .
-    container_name: llm_mini_ui
+  frontend:
+    build: 
+      context: ./frontend
+      dockerfile: Dockerfile.frontend
+    container_name: llm_mini_frontend
     ports:
-      - "8501:8501"
+      - "5173:5173"
     volumes:
-      - ./data:/app/data
-      - ./storage:/app/storage
-    env_file:
-      - .env
+      - ./frontend/src:/app/src
+      - ./frontend/public:/app/public
+      - ./frontend/index.html:/app/index.html
+      - ./frontend/vite.config.js:/app/vite.config.js
     environment:
-      - RAG_API_URL=http://api:8000
+      - VITE_API_URL=http://localhost:8000
     depends_on:
-      - api
-    command: streamlit run src/interfaces/ui.py
+      - backend
     restart: unless-stopped
 
 volumes:

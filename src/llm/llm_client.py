@@ -3,42 +3,29 @@ import json
 import requests
 import logging
 from typing import Generator, Optional
+from src.utils.config import settings
 
 logger = logging.getLogger(__name__)
 
 class LLMEngine:
     """
-    LLM Engine sử dụng Cơ chế Auto-Adaptation 3 Lớp.
-    Tự động chuyển đổi giữa llama-cpp-python và Ollama Portable.
+    LLM Engine sử dụng Cơ chế Gọi API tới Ollama Bridge.
+    Đã được thiết kế động theo cấu hình từ file .env
     """
     def __init__(self):
-        from src.utils.hardware_profiler import ModelZooManager
+        # Không tự đoán phần cứng nữa, đọc thẳng từ config đã được Host cấu hình
+        self.ollama_url = settings.ollama_base_url
+        # Default model cho Ollama
+        self.model_tag = "qwen2.5:3b" if settings.use_reranker else "qwen2.5:0.5b"
         
-        logger.info("Đang kiểm tra và tải cấu hình LLM phù hợp với máy tính...")
-        manager = ModelZooManager()
-        self.config = manager.auto_setup()
-        
-        self.engine = self.config.get('engine', 'ollama')
-        self.model_tag = self.config.get('model_tag')
-        self.model_path = self.config.get('model_path')
-        self.tier = manager.get_tier()
-        
-        self.llm = None
-        if self.engine == 'llama-cpp-python':
-            # Khởi tạo Llama-cpp (đã test thành công ở Lớp 1/2)
-            n_gpu_layers = -1 if (self.tier in [1, 2, 3] or manager.has_mps or manager.has_cuda) else 0
-            n_ctx = 4096
-            from llama_cpp import Llama
-            try:
-                self.llm = Llama(
-                    model_path=self.model_path,
-                    n_gpu_layers=n_gpu_layers,
-                    n_ctx=n_ctx,
-                    verbose=False
-                )
-            except Exception as e:
-                logger.error(f"Lỗi khởi tạo Llama: {e}")
-                self.engine = 'ollama' # Fallback nếu đột ngột lỗi
+        # Thử lấy tên model chính xác từ Ollama API nếu có thể
+        try:
+            tags = requests.get(f"{self.ollama_url}/api/tags", timeout=2).json()
+            if "models" in tags and len(tags["models"]) > 0:
+                # Lấy model đầu tiên làm mặc định (vì Host đã pull model tốt nhất)
+                self.model_tag = tags["models"][0]["name"]
+        except Exception:
+            pass
 
     def generate(self, prompt: str, system_prompt: str = "", is_private: bool = True, gemini_api_key: Optional[str] = None) -> Generator[str, None, None]:
         """Tạo phản hồi dạng Stream (nhả từng chữ)."""
@@ -59,31 +46,8 @@ class LLMEngine:
             except Exception as e:
                 logger.error(f"Lỗi Gemini API: {e}")
                 yield f"Lỗi Gemini API: {e}. Đang fallback về Local Model..."
-        
-        if self.engine == 'llama-cpp-python' and getattr(self, 'llm', None):
-            # Dùng Lớp 1/2: Llama-cpp-python
-            try:
-                stream = self.llm.create_chat_completion(
-                    messages=[
-                        {"role": "system", "content": system_prompt},
-                        {"role": "user", "content": prompt}
-                    ],
-                    max_tokens=2048,
-                    stream=True
-                )
                 
-                for chunk in stream:
-                    if 'choices' in chunk and len(chunk['choices']) > 0:
-                        delta = chunk['choices'][0].get('delta', {})
-                        if 'content' in delta:
-                            yield delta['content']
-                return
-            except Exception as e:
-                logger.error(f"Lỗi gọi Llama-cpp: {e}")
-                yield f"Đã có lỗi xảy ra từ Llama-cpp: {e}"
-                return
-                
-        # Dùng Lớp 3: Gọi Ollama REST API
+        # Gọi Ollama REST API qua Bridge
         try:
             payload = {
                 "model": self.model_tag,
@@ -94,7 +58,7 @@ class LLMEngine:
                 "stream": True
             }
             
-            with requests.post("http://localhost:11434/api/chat", json=payload, stream=True) as response:
+            with requests.post(f"{self.ollama_url}/api/chat", json=payload, stream=True) as response:
                 response.raise_for_status()
                 for line in response.iter_lines():
                     if line:
@@ -104,9 +68,8 @@ class LLMEngine:
                             
         except requests.exceptions.ConnectionError:
             error_msg = (
-                "⚠️ **Lỗi hệ thống: Không thể kết nối tới Ollama!**\n\n"
-                "Sổ tay này đang ở chế độ **Nội bộ (Offline)**. Hệ thống AI đang được khởi động ngầm, vui lòng chờ vài giây rồi thử lại.\n"
-                "Nếu lỗi vẫn tiếp diễn, máy tính của bạn có thể đã chặn cổng 11434."
+                f"⚠️ **Lỗi hệ thống: Không thể kết nối tới Ollama tại {self.ollama_url}!**\n\n"
+                "Hệ thống LLM trên Windows (Host) chưa sẵn sàng hoặc cổng 11434 bị chặn."
             )
             logger.error("Không thể kết nối Ollama.")
             yield error_msg
