@@ -24,6 +24,7 @@ from src.learning.guide_generator import GuideGenerator
 from src.learning.podcast_generator import PodcastGenerator
 from src.retrieval.query_rewriter import QueryRewriter
 from src.retrieval.bm25_index import get_bm25_index, BM25Document, delete_bm25_folder
+from src.retrieval.semantic_router import get_semantic_router
 import uuid
 from cachetools import TTLCache
 
@@ -229,12 +230,22 @@ async def chat_endpoint(request: ChatRequest):
             return
             
         try:
-            # Gửi status: Đang tìm kiếm
-            yield f"data: {json.dumps({'type': 'status', 'message': f'Đang tìm kiếm dữ liệu cho: {final_query}'})}\n\n"
+            # --- INTELLIGENT QUERY ROUTER ---
+            router = get_semantic_router()
+            intent = router.route(final_query)
             
-            # 1. Truy xuất dữ liệu (Retrieval)
-            engine = get_search_engine()
-            context_str, results = engine.retrieve(final_query, notebook_id=request.notebook_id)
+            if intent == "chitchat":
+                yield f"data: {json.dumps({'type': 'status', 'message': 'Đang suy nghĩ câu trả lời...'})}\n\n"
+                context_str = ""
+                results = []
+            elif intent == "summarize":
+                yield f"data: {json.dumps({'type': 'status', 'message': 'Đang tổng hợp thông tin từ tài liệu...'})}\n\n"
+                engine = get_search_engine()
+                context_str, results = engine.retrieve(final_query, notebook_id=request.notebook_id, top_k=10)
+            else:
+                yield f"data: {json.dumps({'type': 'status', 'message': f'Đang tìm kiếm dữ liệu cho: {final_query}'})}\n\n"
+                engine = get_search_engine()
+                context_str, results = engine.retrieve(final_query, notebook_id=request.notebook_id, top_k=5)
             
             # Gửi status: Phân tích
             yield f"data: {json.dumps({'type': 'status', 'message': 'Đang đọc và phân tích ngữ cảnh...'})}\n\n"

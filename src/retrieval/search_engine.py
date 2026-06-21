@@ -2,6 +2,7 @@ from typing import List, Dict, Any, Tuple
 from ..ingestion.indexing import VectorStoreManager
 from ..utils.config import settings
 from .hybrid_search import HybridSearcher
+from .compressor import get_compressor
 
 class SearchEngine:
     """Công cụ truy xuất dữ liệu lai (Hybrid Search: Vector + Keyword)."""
@@ -17,9 +18,16 @@ class SearchEngine:
         
         if not results:
             return "Không tìm thấy thông tin liên quan trong tài liệu.", []
+            
+        # Nén ngữ cảnh (Contextual Compression)
+        compressor = get_compressor()
+        compressed_results = compressor.compress(query, results)
+        
+        if not compressed_results:
+            return "Không có thông tin nào đủ sát với câu hỏi trong tài liệu.", []
 
         context_parts = []
-        for i, res in enumerate(results):
+        for i, res in enumerate(compressed_results):
             content = res["content"]
             metadata = res["metadata"]
             source = metadata.get("source_file") or metadata.get("title") or metadata.get("source_url") or metadata.get("filename") or "Tài liệu"
