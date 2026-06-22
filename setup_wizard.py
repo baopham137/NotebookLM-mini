@@ -140,9 +140,23 @@ def start_docker_compose(compose_cmd):
     print("\n--- [BƯỚC 3] KHỞI ĐỘNG HỆ THỐNG ---")
     print("Đang nổ máy Backend, Frontend và Database (Redis)...")
     try:
-        cmd = compose_cmd + ["up", "-d"]
-        subprocess.run(cmd, check=True)
-        print("[OK] Hệ thống đã chạy ngầm thành công!")
+        if platform.system() == "Darwin":
+            cmd = compose_cmd + ["-f", "docker-compose.mac.yml", "up", "-d"]
+            subprocess.run(cmd, check=True)
+            print("[OK] Redis và Frontend đã chạy ngầm trong Docker!")
+            
+            print("\n[Mac] Đang tạo môi trường ảo và cài đặt thư viện cho Backend (Native)...")
+            subprocess.run([sys.executable, "-m", "uv", "venv", ".venv"], check=False)
+            subprocess.run([sys.executable, "-m", "uv", "pip", "install", "-r", "requirements.txt"], check=True)
+            
+            print("[Mac] Đang khởi động Backend trực tiếp trên hệ điều hành (hỗ trợ GPU Metal)...")
+            uvicorn_exe = os.path.join(os.getcwd(), ".venv", "bin", "uvicorn")
+            subprocess.Popen([uvicorn_exe, "src.api.api:app", "--host", "0.0.0.0", "--port", "8000"])
+            print("[OK] Hệ thống đã chạy thành công!")
+        else:
+            cmd = compose_cmd + ["up", "-d"]
+            subprocess.run(cmd, check=True)
+            print("[OK] Hệ thống đã chạy ngầm thành công!")
     except Exception as e:
         print(f"[LỖI] Docker compose thất bại: {e}")
         sys.exit(1)

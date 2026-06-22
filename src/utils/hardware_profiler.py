@@ -90,11 +90,11 @@ class ModelZooManager:
         # LỰA CHỌN ENGINE DOCKER
         print("\n🚀 BƯỚC 2: LỰA CHỌN ĐỘNG CƠ RAG (PYTORCH ENGINE)")
         print(" NOTE: Mọi phiên bản đều được trang bị đầy đủ Reranker và Embedding GreenNode xịn nhất.")
-        print("  [1] Chế độ MAX SPEED (NVIDIA GPU) | Cài bản full PyTorch | Tốn thêm ~6.0GB ổ cứng | Tốc độ RAG siêu nhanh")
+        print("  [1] Chế độ MAX SPEED (NVIDIA GPU / APPLE METAL) | Cài bản full PyTorch | Tốc độ RAG siêu nhanh")
         print("  [2] Chế độ TIẾT KIỆM (CPU-Only)   | Cài bản PyTorch CPU  | Tốn thêm ~0.2GB ổ cứng | Tốc độ RAG bình thường")
         
         # Tư vấn tự động
-        recommended = "1" if (self.has_cuda and self.free_disk_gb > 15) else "2"
+        recommended = "1" if (self.has_cuda and self.free_disk_gb > 15) or self.os_name == 'Darwin' else "2"
         
         while True:
             choice_engine = input(f"👉 Nhập lựa chọn của bạn (1-2) [Mặc định: {recommended}]: ").strip()
@@ -129,7 +129,8 @@ class ModelZooManager:
         new_settings = {
             "RAG_USE_RERANKER": "false",
             "RAG_EMBEDDING_MODEL": "keepitreal/vietnamese-sbert",
-            "RAG_OLLAMA_BASE_URL": "http://host.docker.internal:11434"
+            "RAG_OLLAMA_BASE_URL": "http://localhost:11434" if self.os_name == 'Darwin' else "http://host.docker.internal:11434",
+            "RAG_REDIS_HOST": "localhost" if self.os_name == 'Darwin' else "redis"
         }
         
         updated_lines = []
@@ -161,19 +162,44 @@ class ModelZooManager:
             req_content = f.read()
             
         if pytorch_mode == "cpu":
-            print("📦 Đã chọn: Cài đặt PyTorch CPU-Only (Diet Plan)")
-            req_content += "\n# --- PyTorch CPU-Only (Diet Plan) ---\n"
-            req_content += "--extra-index-url https://download.pytorch.org/whl/cpu\n"
-            req_content += "torch==2.6.0+cpu\n"
-            req_content += "torchvision==0.21.0+cpu\n"
-            req_content += "torchaudio==2.6.0+cpu\n"
+            if self.os_name == "Darwin":
+                print("📦 Đã chọn: Cài đặt PyTorch Native (Apple Metal)")
+                req_content += "\n# --- PyTorch Apple Metal ---\n"
+                req_content += "torch>=2.0.0\n"
+            else:
+                print("📦 Đã chọn: Cài đặt PyTorch CPU-Only (Diet Plan)")
+                req_content += "\n# --- PyTorch CPU-Only (Diet Plan) ---\n"
+                req_content += "--extra-index-url https://download.pytorch.org/whl/cpu\n"
+                req_content += "torch==2.6.0+cpu\n"
+                req_content += "torchvision==0.21.0+cpu\n"
+                req_content += "torchaudio==2.6.0+cpu\n"
         else:
-            print("📦 Đã chọn: Cài đặt PyTorch NVIDIA GPU (Max Speed)")
-            req_content += "\n# --- PyTorch NVIDIA GPU ---\n"
+            print("📦 Đã chọn: Cài đặt PyTorch Full Speed (NVIDIA GPU / Apple Metal)")
+            req_content += "\n# --- PyTorch Full Speed ---\n"
             req_content += "torch>=2.0.0\n"
             
         with open(req_out_path, "w", encoding="utf-8") as f:
             f.write(req_content)
+            
+        # 3. Ghi file docker-compose.override.yml (NVIDIA GPU Passthrough)
+        override_path = os.path.join(os.getcwd(), "docker-compose.override.yml")
+        if pytorch_mode == "gpu" and self.os_name in ["Windows", "Linux"]:
+            print("🔧 Cấu hình: Đang mở cổng kết nối GPU qua Docker Compose (NVIDIA Runtime)...")
+            override_content = """services:
+  backend:
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]
+"""
+            with open(override_path, "w", encoding="utf-8") as f:
+                f.write(override_content)
+        else:
+            if os.path.exists(override_path):
+                os.remove(override_path)
             
         print("✅ Đã tạo cấu hình hoàn tất!")
         
@@ -216,6 +242,10 @@ class ModelZooManager:
                 os.remove(zip_path)
             elif platform.system() == "Darwin":
                 url = "https://ollama.com/download/ollama-darwin-arm64"
+                urllib.request.urlretrieve(url, ollama_exe, reporthook=download_progress)
+                os.chmod(ollama_exe, 0o755)
+            elif platform.system() == "Linux":
+                url = "https://ollama.com/download/ollama-linux-amd64"
                 urllib.request.urlretrieve(url, ollama_exe, reporthook=download_progress)
                 os.chmod(ollama_exe, 0o755)
             
