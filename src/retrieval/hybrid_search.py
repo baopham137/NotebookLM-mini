@@ -9,7 +9,7 @@ from typing import List, Dict, Optional, Any
 from concurrent.futures import ThreadPoolExecutor
 
 from ..utils.config import settings
-from ..vectordb.vector_store import VectorStoreManager
+from ..ingestion.indexing import VectorStoreManager
 from .bm25_index import get_bm25_index, BM25Document
 
 logger = logging.getLogger(__name__)

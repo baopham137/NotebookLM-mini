@@ -23,6 +23,20 @@ if ! command_exists python3; then
     exit 1
 fi
 
+# 1.5 Cài đặt các công cụ hệ thống cần thiết qua Homebrew
+if command_exists brew; then
+    if ! command_exists ffmpeg; then
+        echo "📦 Đang cài đặt ffmpeg (để xử lý âm thanh)..."
+        brew install ffmpeg
+    fi
+    if ! command_exists tesseract; then
+        echo "📦 Đang cài đặt Tesseract OCR (để nhận diện chữ trong ảnh)..."
+        brew install tesseract tesseract-lang
+    fi
+else
+    echo "⚠️ Cảnh báo: Homebrew chưa được cài đặt, bỏ qua tự động cài ffmpeg và tesseract."
+fi
+
 # 2. Kiểm tra và cài đặt uv (Trình quản lý package siêu tốc)
 if ! command_exists uv; then
     echo "📦 Đang cài đặt uv (Công cụ quản lý môi trường siêu tốc)..."
@@ -55,6 +69,23 @@ fi
 echo "🔍 Đang quét cấu hình máy tính của bạn để đề xuất Model AI tối ưu..."
 python src/utils/hardware_profiler.py
 
+# 6.8 Xây dựng giao diện Frontend
+if command_exists npm; then
+    echo "📦 Đang kiểm tra và xây dựng giao diện người dùng (Frontend)..."
+    cd frontend
+    if [ ! -d "node_modules" ]; then
+        echo "📥 Đang cài đặt thư viện Node.js..."
+        npm install
+    fi
+    if [ ! -d "dist" ]; then
+        echo "🏗 Đang biên dịch giao diện Web..."
+        npm run build
+    fi
+    cd ..
+else
+    echo "⚠️ Lỗi: Không tìm thấy lệnh 'npm'. Giao diện Web sẽ không hiển thị. Vui lòng cài đặt Node.js."
+fi
+
 # 7. Khởi động hệ thống
 echo "✨ Bắt đầu chạy hệ thống..."
 echo "-> Mở trình duyệt Web tại: http://localhost:8000"
@@ -63,4 +94,4 @@ echo "-> Mở trình duyệt Web tại: http://localhost:8000"
 (sleep 3 && open http://localhost:8000) &
 
 # Chạy Backend (chiếm màn hình chính)
-uvicorn src.interfaces.api:app --host 127.0.0.1 --port 8000
+uvicorn src.api.api:app --host 127.0.0.1 --port 8000
