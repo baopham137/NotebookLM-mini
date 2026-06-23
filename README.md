@@ -1,8 +1,8 @@
-# 📓 NotebookLM-Mini (Local AI Edition)
+# 📓 NotebookLM-Mini (Native Local Edition)
 
-NotebookLM-Mini là một trợ lý học tập cá nhân dựa trên kiến trúc **Retrieval-Augmented Generation (RAG)**. Dự án được thiết kế lại hoàn toàn với kiến trúc **Frontend (React)** + **Backend (FastAPI)** + **Docker Compose**, giúp triển khai trơn tru trên mọi hệ điều hành. Hệ thống chú trọng vào chạy cục bộ (Local AI) để bảo mật tuyệt đối dữ liệu.
+NotebookLM-Mini là một trợ lý học tập cá nhân dựa trên kiến trúc **Retrieval-Augmented Generation (RAG)**. Ở phiên bản mới nhất, hệ thống đã loại bỏ hoàn toàn sự cồng kềnh của Docker, thay vào đó sử dụng kiến trúc **Native Local (llama.cpp + FastAPI + React)**. Nhờ vậy, dự án có thể chạy trực tiếp trên hệ điều hành của bạn với dung lượng RAM/VRAM được tối ưu hóa đến mức tối đa.
 
-Dự án cho phép bạn tải lên tài liệu cá nhân (PDF, DOCX, TXT...), tự động phân tích và tương tác qua:
+Dự án cho phép bạn tải lên tài liệu cá nhân (PDF, DOCX, TXT, Hình ảnh, Âm thanh...), tự động phân tích và tương tác qua:
 - 💬 **Hỏi đáp siêu tốc** với RAG (Qdrant Vector Database + BM25).
 - 📝 **Tóm tắt thông minh** tự động ngay khi tải tài liệu.
 - 🎯 **Tạo bài trắc nghiệm (Quiz)** & **Flashcards** để ôn tập kiến thức.
@@ -10,72 +10,52 @@ Dự án cho phép bạn tải lên tài liệu cá nhân (PDF, DOCX, TXT...), t
 
 ---
 
-## 🌟 Tính Năng Triển Khai Nổi Bật
+## 🌟 Tính Năng Nổi Bật Của Kiến Trúc Mới
 
-1. **🚀 1-Click Run (Khởi động 1 chạm):** Tích hợp Script `start.bat` / `start.sh` tự động cài Python, quét phần cứng, sinh cấu hình và bật Docker Compose dưới nền. Người dùng không cần gõ lệnh.
-2. **🧠 Tự động nhận diện phần cứng (Setup Wizard):** `setup_wizard.py` quét RAM/VRAM để quyết định bạn nên chạy Model nặng (Ollama/Qwen 7B) hay Model siêu nhẹ, hoặc chuyển sang dùng Gemini API nếu máy quá yếu.
-3. **🐳 Docker Hóa Hoàn Toàn:** Hệ thống được chia thành 3 container chuẩn mực: `llm_mini_frontend`, `llm_mini_backend`, và `llm_mini_redis` (dùng để quản lý Background Tasks).
-4. **🛡️ Giải Cứu Ổ C (Rescue Drive):** Cung cấp công cụ `rescue_drive_c.py` chuyên dụng để dời ổ ảo Docker (vhdx) và bộ đệm HuggingFace sang ổ D, bảo vệ ổ C của người dùng phổ thông.
+1. **🚀 1-Click Run (Khởi động 1 chạm):** Chỉ cần chạy file `run.bat` (Windows) hoặc `run_mac.command` (Mac). Hệ thống sẽ tự động tạo môi trường ảo (Virtual Environment), tải AI và chạy phần mềm mà không cần bạn phải cấu hình biến môi trường phức tạp.
+2. **🧠 Nhận diện phần cứng thông minh:** Cửa sổ Terminal sẽ cho phép bạn chọn mức độ nặng/nhẹ của mô hình LLM (Qwen 2.5), mô hình Embedding và Reranker để phù hợp nhất với cấu hình máy của bạn (Từ Laptop văn phòng 4GB RAM đến PC Gaming đỉnh cao).
+3. **🛡️ Bảo vệ VRAM tuyệt đối:** Hệ thống RAG được thiết kế để tự động lùi về chạy trên CPU nếu VRAM của bạn thấp (<= 6GB), nhường toàn bộ sức mạnh Card đồ họa cho LLM để tốc độ gõ chữ đạt mức cao nhất.
+4. **👁️ Tải AI Thị Giác & Âm Thanh On-Demand:** Các mô hình phân tích Ảnh (OCR/Moondream) và Âm thanh (Whisper) sẽ không bị tải dư thừa từ đầu. Khi bạn Upload ảnh hoặc âm thanh, Web UI mới hiện ra bảng chọn và tư vấn mô hình phù hợp dựa trên phần cứng.
 
 ---
 
-## 📖 HƯỚNG DẪN SỬ DỤNG (Dành cho Người dùng cuối)
+## 📖 HƯỚNG DẪN CÀI ĐẶT VÀ SỬ DỤNG
 
 ### 1. Yêu Cầu Cài Đặt Ban Đầu
-- Tải và cài đặt **Docker Desktop** (Bắt buộc). Đảm bảo Docker đang chạy (Biểu tượng cá voi màu xanh).
-- Mạng internet cho **lần chạy đầu tiên** để tải hình ảnh Docker và mô hình AI (khoảng 3GB - 10GB tùy cấu hình).
+- Máy tính đã cài sẵn **Python 3.10+**.
+- Kết nối Internet (chỉ cần trong lần chạy đầu tiên để tải mã nguồn và mô hình AI).
 
-### 2. Khởi Động Dự Án (Chỉ 1 Click)
-
+### 2. Khởi Động Dự Án (Lần đầu tiên)
 **Đối với người dùng Windows:**
-1. Mở thư mục dự án.
-2. Nhấp đúp chuột vào file `start.bat`.
-3. Cửa sổ dòng lệnh sẽ hiện lên, nó sẽ tự cài đặt và chạy `setup_wizard` (Hỏi bạn cấu hình 1 lần duy nhất).
-4. Sau đó, nó tự động gọi Docker và mở trình duyệt web tại `http://localhost:5173`.
+1. Nhấp đúp chuột vào file `run.bat`.
+2. Terminal sẽ hiện ra. Bạn sẽ được hỏi 3 câu hỏi để cá nhân hóa phần mềm:
+   - Chọn kích cỡ **Bộ não LLM (Qwen 2.5)**.
+   - Chọn **Mô hình Embedding (GreenNode hoặc sBERT)**.
+   - Chọn **Mô hình Reranker (BGE-M3 hoặc mMiniLM)**.
+3. Chờ phần mềm tự động tải các mô hình này về máy. (Quá trình này tùy thuộc vào tốc độ mạng của bạn, dao động từ 5 phút - 20 phút).
+4. Sau khi tải xong, trình duyệt web sẽ tự động mở lên tại địa chỉ: `http://localhost:5173`.
 
-**Từ lần thứ 2 trở đi:**
-- Bạn có thể nhấp đúp lại `start.bat`. Hệ thống sẽ nhận diện là đã cài đặt và chỉ việc đánh thức Docker lên.
-- **Hoặc** bạn có thể mở giao diện Docker Desktop, tìm nhóm container tên là `llm_mini` và bấm nút **Play (▷)**.
-- Mở trình duyệt web của bạn và gõ: `http://localhost:5173`.
+**Đối với người dùng Mac:**
+- Mở Terminal, trỏ vào thư mục dự án và chạy: `./run_mac.command`.
 
-### 3. Tắt Hệ Thống (Dừng dự án)
-- Mở giao diện Docker Desktop.
-- Bấm nút **Stop (⏹)** ở nhóm `llm_mini`. Hệ thống sẽ đi ngủ, nhả lại RAM và CPU cho máy tính của bạn. Dữ liệu tài liệu của bạn vẫn được lưu giữ an toàn trên ổ cứng.
+### 3. Từ lần chạy thứ 2 trở đi
+- Bạn chỉ việc nhấp đúp lại vào file `run.bat`.
+- Hệ thống sẽ nhận diện là máy đã cài đặt xong, nó sẽ trực tiếp khởi động máy chủ (Backend + LLM) chưa tới 10 giây và mở trình duyệt web cho bạn.
 
 ---
 
 ## 🛠️ HƯỚNG DẪN DÀNH CHO LẬP TRÌNH VIÊN (Developer)
 
-Nếu bạn muốn test code hoặc chạy lẻ tẻ để xem log, thay vì dùng `start.bat`, hãy làm theo các bước sau:
+Nếu bạn muốn chỉnh sửa code của hệ thống, kiến trúc đã được tách bạch rõ ràng:
 
-### 1. Build và Chạy toàn bộ hệ thống bằng Docker
-```bash
-docker-compose up -d --build
-```
-*Lệnh này sẽ khởi chạy Backend (Cổng 8000), Frontend (Cổng 5173) và Redis.*
-*Để xem log của Backend (rất hữu ích khi xem Ingestion hay RAG chạy ngầm):*
-```bash
-docker logs -f llm_mini_backend
-```
+- **Frontend:** Code React (Vite) nằm trong thư mục `frontend/`. 
+  - Chạy môi trường phát triển: `cd frontend && npm run dev`.
+  - Đóng gói: `npm run build`. 
+  Lưu ý: Bạn không cần phải bật dev server của frontend nếu chỉ muốn xài, vì backend tự động phục vụ file tĩnh của Frontend tại cổng 8000.
 
-### 2. Chạy Kiểm Thử Tự Động (E2E Test)
-Dự án được trang bị kịch bản End-to-End Test (E2E) tự động giả lập người dùng: tạo Notebook, tải tài liệu ảo, chờ nạp dữ liệu nền và hỏi LLM một câu hỏi để kiểm tra độ chính xác của RAG.
-
-**Cách chạy E2E Test:**
-```bash
-python tests/test_e2e.py
-```
-*(Yêu cầu: Docker Desktop phải đang bật).*
+- **Backend:** Code FastAPI nằm trong thư mục `src/`.
+  - Bạn có thể xem Log của Backend ngay tại cửa sổ Terminal khi `run.bat` đang chạy để theo dõi quá trình phân tích RAG và Ingestion.
+  - Cấu hình thiết lập được lưu trữ trong file `.env` ẩn tại thư mục gốc. Bạn có thể mở file này để thay đổi `RAG_EMBEDDING_MODEL` hoặc `RAG_RERANKER_MODEL` sang bất kỳ mô hình HuggingFace nào bạn thích.
 
 ---
-
-## 🏥 XỬ LÝ SỰ CỐ (Troubleshooting)
-
-- **Ổ C bị báo đỏ sau khi cài dự án?** 
-  Mở thư mục dự án và nhấp đúp vào `rescue_drive_c.py` (hoặc chạy `python rescue_drive_c.py`). Script này sẽ giúp dời cục dữ liệu Docker khổng lồ từ ổ C sang ổ D an toàn.
-  
-- **Vào Web `localhost:5173` bị trắng trang?**
-  Đảm bảo Docker Desktop của bạn đang bật và các container đang báo xanh. Nếu backend vẫn đang kéo Model, hãy đợi 2-3 phút rồi F5 (tải lại trang).
-
----
-*Dự án NotebookLM Mini - Đóng gói mượt mà như ứng dụng thương mại.*
+*Dự án NotebookLM Mini - Đóng gói mượt mà, siêu việt trên máy tính cá nhân.*
