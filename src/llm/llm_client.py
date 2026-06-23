@@ -1,6 +1,7 @@
 import os
 import json
 import requests
+import requests
 import logging
 from typing import Generator, Optional
 from src.utils.config import settings
@@ -15,6 +16,7 @@ class LLMEngine:
     def __init__(self):
         self.llama_url = settings.llama_server_url
 
+    @trace_execution_generator(event_name="chat_stream", module="llm_client")
     def generate(self, prompt: str, system_prompt: str = "", is_private: bool = True, gemini_api_key: Optional[str] = None) -> Generator[str, None, None]:
         """Tạo phản hồi dạng Stream (nhả từng chữ)."""
         if not is_private and gemini_api_key:

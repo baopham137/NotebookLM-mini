@@ -11,6 +11,9 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from typing import Optional, List
+from fastapi.responses import HTMLResponse
+from src.utils.telemetry import get_system_resources
+from src.utils.logger import app_logger
 
 from src.ingestion.parsers.markitdown_parser import MarkItDownParser
 from src.ingestion.parsers.web_parser import WebParser
@@ -349,6 +352,7 @@ def process_document_bg(notebook_id: str, tree, filename: str, is_private: bool,
         session_manager.update_document_status(notebook_id, filename, "error")
 
 @app.post("/api/ingest/url")
+@trace_execution(event_name="ingest_url", module="api")
 async def ingest_url(background_tasks: BackgroundTasks, notebook_id: str = Form(...), url: str = Form(...)):
     """Nạp dữ liệu từ URL."""
     parser = WebParser()
@@ -375,6 +379,7 @@ async def ingest_url(background_tasks: BackgroundTasks, notebook_id: str = Form(
     return {"status": "success", "message": "URL is processing in background"}
 
 @app.post("/api/ingest/upload")
+@trace_execution(event_name="ingest_file", module="api")
 async def upload_file(
     background_tasks: BackgroundTasks,
     notebook_id: str = Form(...), 
@@ -460,6 +465,54 @@ async def evaluate_knowledge(notebook_id: str = Form(...)):
         import traceback
         traceback.print_exc()
         return {"status": "error", "message": str(e)}
+
+@app.get("/api/health")
+def health_check():
+    status = "OK"
+    return {"status": status}
+
+@app.get("/api/system-resources")
+def system_resources():
+    return get_system_resources()
+
+@app.get("/api/metrics")
+def get_metrics():
+    # Đọc file logs/telemetry.jsonl để phân tích
+    import json
+    from pathlib import Path
+    telemetry_file = Path("logs/telemetry.jsonl")
+    total_queries = 0
+    total_errors = 0
+    recent_latencies = []
+    
+    if telemetry_file.exists():
+        with open(telemetry_file, 'r', encoding='utf-8') as f:
+            lines = f.readlines()
+            for line in lines[-100:]:
+                try:
+                    data = json.loads(line)
+                    if data.get("event") == "generate_llm" or data.get("event") == "chat_stream":
+                        total_queries += 1
+                        if not data.get("success", True):
+                            total_errors += 1
+                        if "latency_ms" in data:
+                            recent_latencies.append(data["latency_ms"])
+                except:
+                    pass
+                    
+    return {
+        "total_queries": total_queries,
+        "total_errors": total_errors,
+        "recent_latencies": recent_latencies[-20:]
+    }
+
+@app.get("/monitoring", response_class=HTMLResponse)
+def serve_monitoring():
+    html_path = os.path.join(os.path.dirname(__file__), "monitoring.html")
+    if os.path.exists(html_path):
+        with open(html_path, "r", encoding="utf-8") as f:
+            return f.read()
+    return "Dashboard HTML not found."
 
 # Phục vụ giao diện React (Frontend SPA)
 FRONTEND_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), "frontend", "dist")
