@@ -14,11 +14,6 @@ function Landing() {
           <BookOpen className="text-gray-700" size={24} />
           <span className="font-semibold text-xl tracking-tight text-gray-800">NotebookLM Mini</span>
         </div>
-        <div className="flex items-center gap-6 text-sm font-medium text-gray-600">
-          <button className="hover:text-black transition-colors border-b-2 border-black pb-1">Tổng quan</button>
-          <button className="hover:text-black transition-colors">Gói</button>
-          <button className="hover:text-black transition-colors">Tải ứng dụng</button>
-        </div>
       </header>
 
       {/* Main Content */}
@@ -36,7 +31,7 @@ function Landing() {
           onClick={() => navigate('/dashboard')}
           className="bg-black hover:bg-gray-800 text-white px-8 py-4 rounded-full text-lg font-medium transition-transform transform hover:scale-105 active:scale-95 shadow-xl"
         >
-          Dùng thử NotebookLM
+          Bắt đầu sử dụng NotebookLM
         </button>
       </main>
 
