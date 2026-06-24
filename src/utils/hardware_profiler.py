@@ -45,34 +45,59 @@ class ModelZooManager:
         self.vram_gb = 0
         self.has_cuda = False
         self.has_mps = False
+        self.gpu_names = []
         self._detect_gpu()
 
     def _detect_gpu(self):
-        try:
-            # 1. Thử dùng nvidia-smi để lấy VRAM chính xác nhất của NVIDIA GPU
-            import subprocess
-            result = subprocess.run(["nvidia-smi", "--query-gpu=memory.total", "--format=csv,noheader,nounits"], capture_output=True, text=True)
-            if result.returncode == 0:
-                vram_mb = int(result.stdout.strip().split('\n')[0])
-                self.vram_gb = vram_mb / 1024
-                self.has_cuda = True
-                return
-        except Exception:
-            pass
-            
-        try:
-            # 2. Thử dùng wmic trên Windows để lấy RAM của các Card khác (AMD, Intel)
-            if platform.system() == "Windows":
-                result = subprocess.run(["wmic", "path", "win32_VideoController", "get", "AdapterRAM"], capture_output=True, text=True)
-                if result.returncode == 0:
-                    lines = [line.strip() for line in result.stdout.split('\n') if line.strip() and line.strip().isdigit()]
+        self.gpu_names = []
+        
+        # 1. Phát hiện GPU trên Windows bằng wmic (để lấy danh sách đầy đủ bao gồm Intel, AMD, NVIDIA)
+        if platform.system() == "Windows":
+            try:
+                import subprocess
+                # Lấy tên GPU
+                result_name = subprocess.run(["wmic", "path", "win32_VideoController", "get", "Name"], capture_output=True, text=True)
+                if result_name.returncode == 0:
+                    self.gpu_names = [line.strip() for line in result_name.stdout.split('\n')[1:] if line.strip()]
+                
+                # Lấy AdapterRAM
+                result_ram = subprocess.run(["wmic", "path", "win32_VideoController", "get", "AdapterRAM"], capture_output=True, text=True)
+                if result_ram.returncode == 0:
+                    lines = [line.strip() for line in result_ram.stdout.split('\n') if line.strip() and line.strip().isdigit()]
                     if lines:
-                        # Lấy card có VRAM cao nhất
                         max_ram_bytes = max(int(ram) for ram in lines)
                         self.vram_gb = max_ram_bytes / (1024**3)
-                        return
+            except Exception:
+                pass
+
+        # 2. Thử dùng nvidia-smi để lấy VRAM chính xác hơn của NVIDIA (nếu có)
+        try:
+            import subprocess
+            result = subprocess.run(["nvidia-smi", "--query-gpu=name,memory.total", "--format=csv,noheader,nounits"], capture_output=True, text=True)
+            if result.returncode == 0:
+                parts = result.stdout.strip().split('\n')[0].split(',')
+                gpu_name = parts[0].strip()
+                vram_mb = int(parts[1].strip())
+                self.vram_gb = vram_mb / 1024
+                self.has_cuda = True
+                if gpu_name not in self.gpu_names:
+                    self.gpu_names.append(gpu_name)
         except Exception:
             pass
+
+        # 3. Phát hiện Apple Silicon trên macOS
+        if platform.system() == "Darwin":
+            try:
+                import platform as pf
+                if "arm" in pf.machine().lower() or "arm" in pf.processor().lower():
+                    self.has_mps = True
+                    self.gpu_names.append("Apple Silicon GPU (Metal)")
+            except Exception:
+                pass
+
+        # 4. Kiểm tra xem có phải card NVIDIA không để gán has_cuda
+        if any("nvidia" in name.lower() for name in self.gpu_names):
+            self.has_cuda = True
 
     def get_tier(self):
         if self.vram_gb > 16:
@@ -146,7 +171,7 @@ class ModelZooManager:
             return True
         except OSError as e:
             if "0xc000001d" in str(e) or "illegal instruction" in str(e).lower():
-                print(f"[Kiểm thử Lớp 2] THẤT BẠI! CPU thiếu tập lệnh (Lỗi AVX2): {e}")
+                print(f"[Kiểm thử Lớp 2] THẤT BẠI! Xung đột tập lệnh CPU (Lỗi 0xc000001d - thường do Wheel chứa AVX-512 mà CPU không hỗ trợ): {e}")
             else:
                 print(f"[Kiểm thử Lớp 2] THẤT BẠI! Lỗi hệ thống: {e}")
             return False
@@ -225,12 +250,21 @@ class ModelZooManager:
     def auto_setup(self):
         config = self.get_recommended_config()
         print(f"--- Auto Hardware Profiler & Model Zoo (3-Layer Auto-Adaptation) ---")
-        print(f"OS: {self.os_name} | RAM: {self.total_ram_gb:.1f} GB | VRAM: {self.vram_gb:.1f} GB")
+        gpu_str = ", ".join(self.gpu_names) if self.gpu_names else "None"
+        print(f"OS: {self.os_name} | RAM: {self.total_ram_gb:.1f} GB | GPUs: {gpu_str} (VRAM: {self.vram_gb:.1f} GB)")
         print(f"Assigned Tier: {config['tier_name']}")
         print(f"--------------------------------------------------------------------")
         
         # Thử Lớp 1 và Lớp 2
-        layer_1_2_success = self.setup_layer_1_and_2()
+        # Nếu phát hiện GPU là AMD hoặc Intel (không phải Nvidia/Apple Silicon) trên Windows,
+        # ta nên chuyển thẳng sang Lớp 3 (Ollama) vì Ollama hỗ trợ tăng tốc GPU AMD/Intel rất tốt (ROCm/Vulkan),
+        # tránh phải cài đặt llama-cpp-python CPU chậm và dễ lỗi tập lệnh.
+        has_amd_intel = any(any(brand in name.lower() for brand in ["amd", "radeon", "intel", "iris", "arc", "xe"]) for name in self.gpu_names)
+        if has_amd_intel and not self.has_cuda and platform.system() == "Windows":
+            print("\n[Điều phối viên] Phát hiện GPU AMD/Intel. Đang tự động chuyển hướng sang Lớp 3 (Ollama) để tối ưu hóa tăng tốc phần cứng...")
+            layer_1_2_success = False
+        else:
+            layer_1_2_success = self.setup_layer_1_and_2()
         
         if layer_1_2_success:
             model_path = self.check_and_install_model(config['repo_id'], config['filename'])
@@ -243,8 +277,9 @@ class ModelZooManager:
             else:
                 print("\n[Điều phối viên] Phát hiện phần cứng không tương thích với Lớp 1/2. Đang tự động chuyển hướng...")
         else:
-            print("\n[Điều phối viên] Không thể cài đặt Lớp 1/2. Đang tự động chuyển hướng...")
-
+            if not (has_amd_intel and not self.has_cuda and platform.system() == "Windows"):
+                print("\n[Điều phối viên] Không thể cài đặt Lớp 1/2. Đang tự động chuyển hướng...")
+ 
         # Chuyển sang Lớp 3
         self.setup_ollama_portable(config['model_tag'])
         config['engine'] = 'ollama'
