@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { BookOpen, Plus, Search, Check, Grid, List, Settings, LayoutGrid } from 'lucide-react';
+import { BookOpen, Plus, Search, Check, Grid, List, Settings, LayoutGrid, Trash2 } from 'lucide-react';
 import axios from 'axios';
 
 function Dashboard() {
@@ -21,6 +21,18 @@ function Dashboard() {
       setNotebooks(res.data);
     } catch (err) {
       console.error(err);
+    }
+  };
+
+  const deleteNotebook = async (e, notebookId) => {
+    e.stopPropagation();
+    if (!window.confirm("Bạn có chắc chắn muốn xóa sổ tay này và toàn bộ dữ liệu bên trong không?")) return;
+    try {
+      await axios.delete(`/api/notebooks/${notebookId}`);
+      setNotebooks(prev => prev.filter(nb => nb.id !== notebookId));
+    } catch (err) {
+      console.error(err);
+      alert("Lỗi khi xóa sổ tay");
     }
   };
 
@@ -120,6 +132,14 @@ function Dashboard() {
             >
               <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/20 to-transparent z-0"></div>
               
+              <button 
+                onClick={(e) => deleteNotebook(e, nb.id)}
+                className="absolute top-4 right-4 z-20 p-2 bg-black/40 hover:bg-red-500/80 text-white rounded-full opacity-0 group-hover:opacity-100 transition-all duration-200 backdrop-blur-md"
+                title="Xóa sổ ghi chú"
+              >
+                <Trash2 size={16} />
+              </button>
+
               <div className="relative z-10">
                 <div className="flex items-center gap-2 mb-2">
                   <div className={`w-6 h-6 rounded flex items-center justify-center text-xs font-bold ${nb.is_private ? 'bg-green-500' : 'bg-blue-500'}`}>
