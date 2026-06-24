@@ -1,3 +1,4 @@
+import os
 from typing import List
 from sentence_transformers import SentenceTransformer
 from ..utils.config import settings
@@ -10,10 +11,10 @@ class LocalEmbedder:
         self.model_name = model_name or "BAAI/bge-m3"
         self.device = settings.hf_device if settings.hf_device != "auto" else None
         
-        print(f"[LocalEmbedder] Đang tải mô hình {self.model_name} lên thiết bị: {self.device}")
+        print(f"[LocalEmbedder] Đang tải mô hình {self.model_name} lên thiết bị: {self.device} (Chế độ Offline)")
         
-        # Load model using sentence-transformers
-        self.model = SentenceTransformer(self.model_name, device=self.device)
+        # Load model using sentence-transformers, chặn hoàn toàn gọi mạng bằng local_files_only=True
+        self.model = SentenceTransformer(self.model_name, device=self.device, local_files_only=True)
         
         # Nếu thiết bị là CPU và config cấu hình là int8_onnx, 
         # (Lưu ý: sentence-transformers không hỗ trợ export onnx trực tiếp dễ dàng,

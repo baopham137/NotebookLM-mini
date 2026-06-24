@@ -184,8 +184,7 @@ async def chat_endpoint(request: ChatRequest):
 async def ingest_url(background_tasks: BackgroundTasks, notebook_id: str = Form(...), url: str = Form(...)):
     """Nạp dữ liệu từ URL."""
     parser = WebParser()
-    tree = parser.parse(url)
-    tree.metadata["notebook_id"] = notebook_id
+    tree = parser.parse(url, source_metadata={"notebook_id": notebook_id})
     
     filename = tree.metadata.get("title", url)
     chunker = AdaptiveChunker(embedder=get_embedder())
@@ -237,9 +236,7 @@ async def upload_file(
     else:
         parser = MarkItDownParser()
         
-    tree = parser.parse(file_path)
-    
-    tree.metadata["notebook_id"] = notebook_id
+    tree = parser.parse(file_path, source_metadata={"notebook_id": notebook_id})
     
     chunker = AdaptiveChunker(embedder=get_embedder())
     chunks = chunker.process_document(tree)

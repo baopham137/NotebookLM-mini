@@ -156,10 +156,16 @@ class ModelZooManager:
 
     def check_and_install_model(self, repo_id: str, filename: str) -> str:
         """Tải model từ HF về thư mục /models và trả về đường dẫn."""
-        from huggingface_hub import hf_hub_download
         models_dir = os.path.join(os.getcwd(), "models")
         os.makedirs(models_dir, exist_ok=True)
-        print(f"\n[Model Manager] Đang tải mô hình GGUF: \033[92m{filename}\033[0m")
+        
+        target_path = os.path.join(models_dir, filename)
+        if os.path.exists(target_path):
+            print(f"\n[Model Manager] Đã tìm thấy mô hình Offline: \033[92m{filename}\033[0m")
+            return target_path
+            
+        print(f"\n[Model Manager] Đang tải mô hình GGUF (Cần WiFi): \033[92m{filename}\033[0m")
+        from huggingface_hub import hf_hub_download
         try:
             model_path = hf_hub_download(repo_id=repo_id, filename=filename, local_dir=models_dir, local_dir_use_symlinks=False)
             return model_path
@@ -215,12 +221,17 @@ class ModelZooManager:
                     time.sleep(0.5)
         
         # 3. Kích hoạt Pull Model
-        print(f"\n[Lớp 3] Hệ thống đang tải bộ não AI tương thích cho Ollama: \033[92m{model_tag}\033[0m")
+        print(f"\n[Lớp 3] Đang kiểm tra bộ não AI: \033[92m{model_tag}\033[0m")
         try:
-            subprocess.run([ollama_exe, "pull", model_tag], check=True)
+            list_output = subprocess.run([ollama_exe, "list"], capture_output=True, text=True).stdout
+            if model_tag not in list_output:
+                print(f"[Lớp 3] Đang tải mô hình từ mạng về (Cần WiFi)...")
+                subprocess.run([ollama_exe, "pull", model_tag], check=True)
+            else:
+                print(f"[Lớp 3] Đã có sẵn mô hình Offline, bỏ qua tải xuống!")
             print(f"[Lớp 3] Sẵn sàng phục vụ!")
         except Exception as e:
-            print(f"[Lớp 3] Lỗi tải {model_tag}: {str(e)}")
+            print(f"[Lớp 3] Lỗi khởi tạo {model_tag}: {str(e)}")
 
     def auto_setup(self):
         config = self.get_recommended_config()
