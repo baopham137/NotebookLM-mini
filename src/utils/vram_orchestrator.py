@@ -70,13 +70,6 @@ class VRAMOrchestrator:
         """Xả Embedding model khỏi bộ nhớ."""
         if self._embedder is not None:
             logger.info("[Orchestrator] 🔻 Đang xả Embedding model khỏi bộ nhớ...")
-            try:
-                # Xóa model bên trong SentenceTransformer
-                if hasattr(self._embedder, 'model'):
-                    del self._embedder.model
-                del self._embedder
-            except Exception as e:
-                logger.warning(f"[Orchestrator] Lỗi khi xả Embedding: {e}")
             self._embedder = None
             self._free_memory()
             logger.info("[Orchestrator] ✅ Đã xả Embedding model.")
@@ -85,12 +78,6 @@ class VRAMOrchestrator:
         """Xả Reranker model khỏi bộ nhớ."""
         if self._reranker is not None:
             logger.info("[Orchestrator] 🔻 Đang xả Reranker model khỏi bộ nhớ...")
-            try:
-                if hasattr(self._reranker, 'model'):
-                    del self._reranker.model
-                del self._reranker
-            except Exception as e:
-                logger.warning(f"[Orchestrator] Lỗi khi xả Reranker: {e}")
             self._reranker = None
             self._free_memory()
             logger.info("[Orchestrator] ✅ Đã xả Reranker model.")

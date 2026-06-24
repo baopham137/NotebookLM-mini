@@ -39,6 +39,7 @@ function Studio() {
   const [showUrlInput, setShowUrlInput] = useState(false);
   const [urlInputValue, setUrlInputValue] = useState('');
   const [uploadingDocs, setUploadingDocs] = useState([]);
+  const [notebookNotFound, setNotebookNotFound] = useState(false);
 
   const messagesEndRef = useRef(null);
 
@@ -102,6 +103,8 @@ function Studio() {
             const docs = await docRes.json();
             setDocuments(docs);
           }
+        } else {
+          setNotebookNotFound(true);
         }
       } catch (e) {
         console.error(e);
@@ -134,6 +137,26 @@ function Studio() {
       if (intervalId) clearInterval(intervalId);
     };
   }, [activeNotebook, studyGuide, documents]);
+
+  // Polling Documents if any is 'processing'
+  useEffect(() => {
+    let intervalId;
+    if (activeNotebook && documents.some(d => d.status === 'processing')) {
+      intervalId = setInterval(async () => {
+        try {
+          const docRes = await fetch(`/api/notebooks/${activeNotebook.id}/documents`);
+          if (docRes.ok) {
+            setDocuments(await docRes.json());
+          }
+        } catch (e) {
+          console.error("Lỗi khi poll documents:", e);
+        }
+      }, 2000);
+    }
+    return () => {
+      if (intervalId) clearInterval(intervalId);
+    };
+  }, [activeNotebook, documents]);
 
   const generatePodcast = async () => {
     setPodcastGenerating(true);
@@ -489,6 +512,22 @@ function Studio() {
     }
   };
 
+  if (notebookNotFound) {
+    return (
+      <div className="h-screen w-full flex flex-col items-center justify-center bg-[#131314] text-white">
+        <XCircle size={64} className="text-red-500 mb-4" />
+        <h1 className="text-2xl font-bold mb-2">Sổ tay không tồn tại!</h1>
+        <p className="text-gray-400 mb-6">Sổ tay này đã bị xóa hoặc không còn trên hệ thống.</p>
+        <button 
+          onClick={() => navigate('/dashboard')}
+          className="bg-blue-600 hover:bg-blue-700 text-white px-6 py-2 rounded-lg font-medium transition-colors"
+        >
+          Quay về Trang chủ
+        </button>
+      </div>
+    );
+  }
+
   if (!activeNotebook) return <div className="h-screen w-full flex items-center justify-center bg-[#131314] text-white"><Loader className="animate-spin" size={32} /></div>;
 
   return (
@@ -523,13 +562,29 @@ function Studio() {
                   <div className="flex items-center gap-3 flex-1 min-w-0">
                     <div className="w-10 h-10 rounded-lg bg-blue-500/20 flex items-center justify-center text-blue-400 shrink-0 relative">
                       {doc.filename.includes('http') || doc.filename.includes('YouTube') ? <LinkIcon size={20} /> : <FileText size={20} />}
-                      <div className="absolute -bottom-1 -right-1 bg-green-500 rounded-full text-[#131314] p-0.5">
-                        <Check size={10} strokeWidth={4} />
-                      </div>
+                      {doc.status === 'processing' ? (
+                        <div className="absolute -bottom-1 -right-1 bg-blue-500 rounded-full text-white p-0.5">
+                          <Loader size={10} strokeWidth={4} className="animate-spin" />
+                        </div>
+                      ) : doc.status === 'error' ? (
+                        <div className="absolute -bottom-1 -right-1 bg-red-500 rounded-full text-white p-0.5">
+                          <X size={10} strokeWidth={4} />
+                        </div>
+                      ) : (
+                        <div className="absolute -bottom-1 -right-1 bg-green-500 rounded-full text-[#131314] p-0.5">
+                          <Check size={10} strokeWidth={4} />
+                        </div>
+                      )}
                     </div>
                     <div className="flex-1 min-w-0">
                       <p className="text-sm font-medium truncate text-gray-200" title={doc.filename}>{doc.filename}</p>
-                      <p className="text-xs text-gray-500 truncate">{new Date(doc.created_at).toLocaleString('vi-VN')}</p>
+                      {doc.status === 'processing' ? (
+                        <p className="text-xs text-blue-400 truncate">Đang xử lý dữ liệu...</p>
+                      ) : doc.status === 'error' ? (
+                        <p className="text-xs text-red-500 truncate">Lỗi nạp dữ liệu</p>
+                      ) : (
+                        <p className="text-xs text-gray-500 truncate">{new Date(doc.created_at).toLocaleString('vi-VN')}</p>
+                      )}
                     </div>
                   </div>
                   <button 

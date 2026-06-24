@@ -10,10 +10,16 @@ def _resolve_device(device_str: str) -> str:
             if torch.cuda.is_available():
                 # Lấy tổng dung lượng VRAM của GPU 0 (tính bằng GB)
                 vram_gb = torch.cuda.get_device_properties(0).total_memory / (1024**3)
-                # Nếu VRAM <= 6GB, ưu tiên nhường VRAM cho LLM, đẩy Embedding về CPU
-                if vram_gb <= 6.0:
+                print(f"[DEBUG_VRAM] Detected VRAM: {vram_gb} GB")
+                # Hạ ngưỡng an toàn xuống 3.5GB (để card 4GB gánh chung được Qwen3B + GreenNode)
+                if vram_gb < 3.5:
                     return "cpu"
                 return "cuda"
+            
+            # Hỗ trợ Apple Silicon Mac (M1/M2/M3/M4)
+            if hasattr(torch.backends, "mps") and torch.backends.mps.is_available():
+                return "mps"
+                
             return "cpu"
         except ImportError:
             return "cpu"

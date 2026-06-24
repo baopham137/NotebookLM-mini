@@ -28,8 +28,10 @@ def load_cross_encoder():
     if device == "auto":
         if torch.cuda.is_available():
             vram_gb = torch.cuda.get_device_properties(0).total_memory / (1024**3)
-            # Dưới 6GB VRAM thì nhường cho LLM, đẩy Reranker về CPU
-            device = "cuda" if vram_gb > 6.0 else "cpu"
+            # Hạ ngưỡng an toàn xuống 3.5GB để Reranker có thể dùng chung GPU 4GB với Qwen
+            device = "cuda" if vram_gb > 3.5 else "cpu"
+        elif hasattr(torch.backends, "mps") and torch.backends.mps.is_available():
+            device = "mps"
         else:
             device = "cpu"
         

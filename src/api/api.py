@@ -53,6 +53,10 @@ app.add_middleware(
 
 import threading
 
+vector_store = None
+search_engine = None
+llm_engine = None
+
 vector_store_lock = threading.Lock()
 search_engine_lock = threading.Lock()
 llm_engine_lock = threading.Lock()

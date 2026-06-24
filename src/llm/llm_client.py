@@ -50,6 +50,12 @@ class LLMEngine:
                 ],
                 "stream": True
             }
+            if settings.llm_provider == "ollama":
+                payload["model"] = os.environ.get("RAG_OLLAMA_MODEL", "qwen2.5:3b")
+            elif os.environ.get("RAG_OLLAMA_MODEL"):
+                payload["model"] = os.environ.get("RAG_OLLAMA_MODEL")
+            else:
+                payload["model"] = "default"
             
             with requests.post(f"{self.llama_url}/v1/chat/completions", json=payload, stream=True) as response:
                 response.raise_for_status()

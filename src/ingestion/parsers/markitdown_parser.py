@@ -58,10 +58,6 @@ class MarkItDownParser:
         image_pattern = re.compile(r'!\[([^\]]*)\]\(([^)]+)\)')
         image_matches = list(image_pattern.finditer(markdown_text))
         
-        if not image_matches:
-            logger.info("[MarkItDownParser] PDF không chứa ảnh nào. Bỏ qua.")
-            return markdown_text
-
         # Trích xuất ảnh vật lý từ PDF
         temp_dir = tempfile.mkdtemp(prefix="pdf_images_")
         extracted_images = []
@@ -101,7 +97,7 @@ class MarkItDownParser:
             logger.info("[MarkItDownParser] PyMuPDF không tìm thấy ảnh nhúng nào trong PDF.")
             return markdown_text
 
-        # Khởi tạo ImageParser để gọi LLaVA
+        # Khởi tạo ImageParser để gọi Vision Model
         try:
             from .image_parser import ImageParser
             img_parser = ImageParser()
@@ -109,29 +105,38 @@ class MarkItDownParser:
             logger.error(f"[MarkItDownParser] Không thể khởi tạo ImageParser: {e}")
             return markdown_text
 
-        # Ghép nối: Mỗi dòng ![alt](image) trong Markdown tương ứng với 1 ảnh trích xuất
-        # Thay thế theo thứ tự từ cuối lên đầu để không làm lệch vị trí (offset)
         enriched_markdown = markdown_text
         num_replacements = min(len(image_matches), len(extracted_images))
 
+        # 1. Thay thế những ảnh có tag Markdown
         for i in range(num_replacements - 1, -1, -1):
             match = image_matches[i]
             img_info = extracted_images[i]
             
-            # Gọi LLaVA phân tích ảnh
             description = img_parser._describe_with_ollama(img_info["path"])
-            
             if description:
                 alt_text = match.group(1) or "Hình ảnh"
-                replacement = f"[Mô tả hình ảnh - {alt_text} (Trang {img_info['page']})]: {description}"
+                replacement = f"\n\n[Mô tả hình ảnh - {alt_text} (Trang {img_info['page']})]: {description}\n\n"
                 enriched_markdown = (
                     enriched_markdown[:match.start()] + 
                     replacement + 
                     enriched_markdown[match.end():]
                 )
-                logger.info(f"[MarkItDownParser] Đã phân tích ảnh {i+1}/{num_replacements} bằng LLaVA.")
-            else:
-                logger.warning(f"[MarkItDownParser] LLaVA không thể phân tích ảnh {i+1}. Giữ nguyên dòng gốc.")
+                logger.info(f"[MarkItDownParser] Đã phân tích ảnh {i+1}/{len(extracted_images)}.")
+
+        # 2. Xử lý những ảnh còn dư (MarkItDown không sinh tag)
+        leftover_images = extracted_images[num_replacements:]
+        if leftover_images:
+            appended_descriptions = []
+            for i, img_info in enumerate(leftover_images):
+                description = img_parser._describe_with_ollama(img_info["path"])
+                if description:
+                    appended_descriptions.append(f"- **Hình ảnh ở trang {img_info['page']}**: {description}")
+                    logger.info(f"[MarkItDownParser] Đã phân tích ảnh còn dư {num_replacements + i + 1}/{len(extracted_images)}.")
+            
+            if appended_descriptions:
+                enriched_markdown += "\n\n### Phần phụ lục: Các hình ảnh được trích xuất từ PDF\n\n"
+                enriched_markdown += "\n\n".join(appended_descriptions)
 
         # Dọn dẹp thư mục tạm
         try:

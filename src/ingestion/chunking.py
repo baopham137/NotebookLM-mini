@@ -62,7 +62,12 @@ class AdaptiveChunker:
     def __init__(self, embedder=None):
         self.tier = self._get_hardware_tier()
         
-        if self.tier in [1, 2]:
+        # Kiểm tra thực tế xem Embedder có được lên GPU hay không (tránh báo cáo giả)
+        is_embedder_on_gpu = False
+        if embedder and hasattr(embedder, 'device'):
+            is_embedder_on_gpu = str(embedder.device) != "cpu"
+            
+        if self.tier in [1, 2] and is_embedder_on_gpu:
             if not embedder:
                 raise ValueError("Semantic Chunking cần một Embedder object.")
             print("[AdaptiveChunker] Chế độ GPU: Kích hoạt Semantic Chunking.")
