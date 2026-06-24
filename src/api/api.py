@@ -65,6 +65,7 @@ def clear_cache(notebook_id: str):
     for k in keys_to_delete:
         del _QUERY_CACHE[k]
 
+query_rewriter = None
 def get_query_rewriter():
     global query_rewriter
     if query_rewriter is None:
@@ -370,8 +371,7 @@ def process_document_bg(notebook_id: str, tree, filename: str, is_private: bool,
 async def ingest_url(background_tasks: BackgroundTasks, notebook_id: str = Form(...), url: str = Form(...)):
     """Nạp dữ liệu từ URL."""
     parser = WebParser()
-    tree = parser.parse(url)
-    tree.metadata["notebook_id"] = notebook_id
+    tree = parser.parse(url, source_metadata={"notebook_id": notebook_id})
     
     filename = tree.metadata.get("title", url)
     
@@ -409,21 +409,20 @@ async def upload_file(
     if file.filename.lower().endswith(('.mp3', '.wav', '.flac', '.ogg', '.m4a')):
         from src.ingestion.parsers.audio_parser import AudioParser
         parser = AudioParser()
-        tree = parser.parse(file_path)
+        tree = parser.parse(file_path, source_metadata={"notebook_id": notebook_id})
     elif file.filename.lower().endswith(('.png', '.jpg', '.jpeg', '.gif', '.webp', '.bmp')):
         from src.ingestion.parsers.image_parser import ImageParser
         parser = ImageParser()
-        tree = parser.parse(file_path)
+        tree = parser.parse(file_path, source_metadata={"notebook_id": notebook_id})
     elif file.filename.lower().endswith(('.md', '.markdown')):
         from src.ingestion.parsers.markdown_parser import MarkdownParser
         parser = MarkdownParser()
         with open(file_path, "r", encoding="utf-8") as f:
-            tree = parser.parse(f.read())
+            tree = parser.parse(f.read(), source_metadata={"notebook_id": notebook_id})
     else:
         parser = MarkItDownParser()
-        tree = parser.parse(file_path)
+        tree = parser.parse(file_path, source_metadata={"notebook_id": notebook_id})
     
-    tree.metadata["notebook_id"] = notebook_id
     filename = file.filename
     
     session_manager.add_document(notebook_id, filename, status="processing")
@@ -459,52 +458,6 @@ async def generate_podcast(background_tasks: BackgroundTasks, notebook_id: str =
         gemini_api_key=api_key
     )
     return {"status": "processing"}
-
-# --- GAMIFICATION PHASE 2 ENDPOINTS ---
-
-class AddExpRequest(BaseModel):
-    amount: int
-
-@app.post("/api/notebooks/{notebook_id}/add-exp")
-async def add_exp(notebook_id: str, req: AddExpRequest):
-    result = session_manager.add_exp(notebook_id, req.amount)
-    return result
-
-class UnlockSkillRequest(BaseModel):
-    skill_id: str
-    cost: int
-
-@app.post("/api/notebooks/{notebook_id}/unlock-skill")
-async def unlock_skill(notebook_id: str, req: UnlockSkillRequest):
-    success = session_manager.unlock_skill(notebook_id, req.skill_id, req.cost)
-    if success:
-        return {"status": "success", "message": f"Unlocked {req.skill_id}"}
-    raise HTTPException(status_code=400, detail="Not enough SP or notebook not found")
-
-@app.get("/api/notebooks/{notebook_id}/skills")
-async def get_skills(notebook_id: str):
-    return session_manager.get_unlocked_skills(notebook_id)
-
-@app.get("/api/leaderboard")
-async def get_leaderboard():
-    real_users = session_manager.get_leaderboard()
-    
-    # Fake bots to simulate competition
-    bots = [
-        {"id": "bot_1", "title": "🤖 Bé Lệ (AI)", "level": 5, "exp": 250},
-        {"id": "bot_2", "title": "🤖 Giáo Sư X", "level": 12, "exp": 80},
-        {"id": "bot_3", "title": "🤖 Tiến Sĩ Phét", "level": 20, "exp": 1500}
-    ]
-    
-    combined = real_users + bots
-    # Sort by level DESC, exp DESC
-    combined.sort(key=lambda x: (x["level"], x["exp"]), reverse=True)
-    
-    # Assign ranks
-    for i, user in enumerate(combined):
-        user["rank"] = i + 1
-        
-    return combined
 
 @app.post("/api/evaluate")
 async def evaluate_knowledge(notebook_id: str = Form(...)):

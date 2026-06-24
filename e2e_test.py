@@ -119,30 +119,7 @@ def main():
     print(f"Podcast Generation initiated: {pod_res.status_code}")
 
     # 8. Gamification Flow
-    print("\n--- Testing Gamification ---")
-    state = requests.get(f"{BASE_URL}/api/notebooks/{notebook_id}/gamification").json()
-    print("Initial State:", state)
-    
-    print("\nGenerating Survival Quiz...")
-    quiz_res = requests.post(f"{BASE_URL}/api/notebooks/{notebook_id}/survival-quiz")
-    if quiz_res.status_code == 200:
-        print("Quiz Generated successfully.")
-    else:
-        print("Quiz Failed:", quiz_res.text)
 
-    print("\nTriggering Lockout (Fail Quiz)...")
-    requests.post(f"{BASE_URL}/api/notebooks/{notebook_id}/gamification", json={"trigger_lockout": True})
-    
-    state = requests.get(f"{BASE_URL}/api/notebooks/{notebook_id}/gamification").json()
-    print("State after lockout:", state)
-    
-    print("\nSubmitting Essay to Unlock...")
-    essay_text = "Tôi đã học được rất nhiều điều thú vị và sâu sắc về máy tính lượng tử, hệ thống qubit, siêu máy tính cũng như cơ chế hoạt động của động cơ hơi nước trong cuộc cách mạng công nghiệp."
-    essay_res = requests.post(f"{BASE_URL}/api/notebooks/{notebook_id}/unlock-essay", json={"essay": essay_text})
-    print("Essay Response:", essay_res.json())
-    
-    state = requests.get(f"{BASE_URL}/api/notebooks/{notebook_id}/gamification").json()
-    print("Final State:", state)
 
     # 9. Delete resources
     print("\n--- Deleting Resources ---")

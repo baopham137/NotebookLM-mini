@@ -737,14 +737,7 @@ function Studio() {
       </div>
 
       <div className="w-80 lg:w-96 flex-shrink-0 h-full p-4 overflow-y-auto scrollbar-hide bg-[#131314] flex flex-col gap-6 border-l border-white/5 relative">
-        {gamification?.is_locked && (
-          <LockoutOverlay 
-            notebookId={activeNotebook.id} 
-            onUnlocked={() => {
-              setGamification(prev => ({...prev, is_locked: false, hp: 3}));
-            }} 
-          />
-        )}
+
         <div className={`glass-panel p-5 rounded-2xl border transition-all border-white/10`}>
           <div className="flex justify-between items-center mb-3">
             <h3 className={`text-lg font-bold flex items-center gap-2 transition-colors text-electric-blue`}>
@@ -817,20 +810,7 @@ function Studio() {
                     <div className="flex flex-col gap-3">
                       <p className="text-xs text-gray-400">Tạo bản thu âm trò chuyện giữa 2 MC ảo.</p>
                       
-                      {gamification?.skills?.podcast_pro >= 1 && (
-                        <div className="mb-2">
-                          <select 
-                            value={podcastStyle}
-                            onChange={(e) => setPodcastStyle(e.target.value)}
-                            className="w-full bg-[#1e1e1f] text-white p-2 rounded-lg border border-white/10 outline-none text-xs"
-                          >
-                            <option value="normal">Style: Bình thường</option>
-                            <option value="debate">🔥 Style: Tranh biện</option>
-                            <option value="sarcastic">🤡 Style: Cà khịa</option>
-                          </select>
-                        </div>
-                      )}
-                      
+
                       <button 
                         onClick={generatePodcast}
                         disabled={podcastGenerating}

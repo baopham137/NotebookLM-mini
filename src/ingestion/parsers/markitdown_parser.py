@@ -119,7 +119,7 @@ class MarkItDownParser:
             img_info = extracted_images[i]
             
             # Gọi LLaVA phân tích ảnh
-            description = img_parser._describe_with_llava(img_info["path"])
+            description = img_parser._describe_with_ollama(img_info["path"])
             
             if description:
                 alt_text = match.group(1) or "Hình ảnh"
@@ -182,7 +182,7 @@ class MarkItDownParser:
                     f.write(img_bytes)
                     
                 # Gọi LLaVA phân tích ảnh
-                description = img_parser._describe_with_llava(img_path)
+                description = img_parser._describe_with_ollama(img_path)
                 
                 if description:
                     replacement = f"[Mô tả hình ảnh - {alt_text}]: {description}"

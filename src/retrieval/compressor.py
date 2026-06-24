@@ -2,7 +2,7 @@ import logging
 import re
 from typing import List, Dict, Any
 
-from .reranker import _load_cross_encoder
+from .reranker import load_cross_encoder
 
 logger = logging.getLogger(__name__)
 
@@ -29,7 +29,7 @@ class ContextualCompressor:
         if not chunks:
             return []
             
-        model = _load_cross_encoder()
+        model = load_cross_encoder()
         if model is None:
             logger.warning("Cross-Encoder unavailable. Bỏ qua bước Compression.")
             return chunks

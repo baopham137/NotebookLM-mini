@@ -174,11 +174,14 @@ class PodcastGenerator:
         output_path = os.path.join(self.output_dir, output_filename)
         
         # Sinh audio thực tế (tương tự method trên)
-        loop = asyncio.new_event_loop()
-        asyncio.set_event_loop(loop)
-        try:
-            loop.run_until_complete(self._generate_audio_sequence(dialogues, output_path))
-        finally:
-            loop.close()
+        if is_private:
+            self._generate_offline(dialogues, output_path)
+        else:
+            loop = asyncio.new_event_loop()
+            asyncio.set_event_loop(loop)
+            try:
+                loop.run_until_complete(self._generate_online(dialogues, output_path))
+            finally:
+                loop.close()
             
         return f"/api/podcasts/{output_filename}"
