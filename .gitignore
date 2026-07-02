@@ -15,7 +15,8 @@ ENV/
 .idea/
 *.swp
 *.swo
-
+cache/
+models/
 # Project Data & Storage
 # Ignore data uploads and persistence storage
 data/*

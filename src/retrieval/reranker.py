@@ -11,7 +11,7 @@ from ..utils.config import settings
 logger = logging.getLogger(__name__)
 
 @lru_cache(maxsize=1)
-def _load_cross_encoder():
+def load_cross_encoder():
     """Lazy-load the Cross-Encoder model."""
     try:
         from sentence_transformers import CrossEncoder
@@ -23,13 +23,25 @@ def _load_cross_encoder():
     model_name = settings.reranker_model
     if settings.low_vram_mode:
         model_name = "cross-encoder/mmarco-mMiniLMv2-L12-H384-v1"
+    
+    # Tự động phát hiện GPU và bảo vệ VRAM
+    device = settings.hf_device
+    if device == "auto":
+        if torch.cuda.is_available():
+            vram_gb = torch.cuda.get_device_properties(0).total_memory / (1024**3)
+            # Hạ ngưỡng an toàn xuống 3.5GB để Reranker có thể dùng chung GPU 4GB với Qwen
+            device = "cuda" if vram_gb > 3.5 else "cpu"
+        elif hasattr(torch.backends, "mps") and torch.backends.mps.is_available():
+            device = "mps"
+        else:
+            device = "cpu"
         
-    logger.info(f"Loading Cross-Encoder model: {model_name} ...")
+    logger.info(f"Loading Cross-Encoder model: {model_name} on {device}...")
     try:
         model = CrossEncoder(
             model_name,
-            device=settings.hf_device,
-            model_kwargs={"torch_dtype": torch.float16 if settings.hf_device != "cpu" else torch.float32}
+            device=device,
+            model_kwargs={"torch_dtype": torch.float16 if device != "cpu" else torch.float32}
         )
         logger.info("Cross-Encoder loaded successfully.")
         return model
@@ -61,7 +73,7 @@ class CrossEncoderReranker:
         if len(chunks) <= rerank_k:
             return chunks
 
-        model = _load_cross_encoder()
+        model = load_cross_encoder()
         if model is None:
             logger.warning("Cross-Encoder unavailable. Trả về top chunks mặc định.")
             # Sort by existing score just in case

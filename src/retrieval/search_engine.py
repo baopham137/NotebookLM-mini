@@ -1,23 +1,33 @@
-from typing import List, Dict, Any
+from typing import List, Dict, Any, Tuple
 from ..ingestion.indexing import VectorStoreManager
 from ..utils.config import settings
+from .hybrid_search import HybridSearcher
+from .compressor import get_compressor
 
 class SearchEngine:
-    """Công cụ truy xuất dữ liệu từ Vector Database (RAG Retrieval)."""
+    """Công cụ truy xuất dữ liệu lai (Hybrid Search: Vector + Keyword)."""
     def __init__(self, vector_store: VectorStoreManager):
         self.vector_store = vector_store
+        self.hybrid_searcher = HybridSearcher(vector_store)
 
-    def retrieve(self, query: str, notebook_id: str, top_k: int = 5) -> str:
+    def retrieve(self, query: str, notebook_id: str, top_k: int = 5) -> Tuple[str, List[Dict[str, Any]]]:
         """
-        Tìm kiếm các đoạn văn bản liên quan và định dạng chúng thành Context cho LLM.
+        Tìm kiếm các đoạn văn bản liên quan bằng Hybrid Search và định dạng chúng thành Context cho LLM.
         """
-        results = self.vector_store.search(query, limit=top_k, notebook_id=notebook_id)
+        results = self.hybrid_searcher.search(query, k=top_k, notebook_id=notebook_id)
         
         if not results:
             return "Không tìm thấy thông tin liên quan trong tài liệu.", []
+            
+        # Nén ngữ cảnh (Contextual Compression)
+        compressor = get_compressor()
+        compressed_results = compressor.compress(query, results)
+        
+        if not compressed_results:
+            return "Không có thông tin nào đủ sát với câu hỏi trong tài liệu.", []
 
         context_parts = []
-        for i, res in enumerate(results):
+        for i, res in enumerate(compressed_results):
             content = res["content"]
             metadata = res["metadata"]
             source = metadata.get("source_file") or metadata.get("title") or metadata.get("source_url") or metadata.get("filename") or "Tài liệu"

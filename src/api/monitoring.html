@@ -1,0 +1,123 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>NotebookLM Mini - System Monitoring</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; margin: 0; padding: 20px; background-color: #f5f7fa; color: #333; }
+        .dashboard { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 20px; max-width: 1200px; margin: 0 auto; }
+        .card { background: white; border-radius: 8px; padding: 20px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
+        h1 { text-align: center; color: #2c3e50; }
+        h2 { margin-top: 0; font-size: 1.2rem; color: #34495e; border-bottom: 2px solid #ecf0f1; padding-bottom: 10px; }
+        .metric { font-size: 2rem; font-weight: bold; color: #3498db; }
+        .status-ok { color: #2ecc71; font-weight: bold; }
+        .status-warn { color: #f39c12; font-weight: bold; }
+        .status-err { color: #e74c3c; font-weight: bold; }
+        table { width: 100%; border-collapse: collapse; margin-top: 10px; }
+        th, td { text-align: left; padding: 8px; border-bottom: 1px solid #ddd; }
+    </style>
+</head>
+<body>
+    <h1>System Monitoring Dashboard</h1>
+    <div class="dashboard">
+        <div class="card">
+            <h2>Health Status</h2>
+            <table>
+                <tr><td>Backend API</td><td id="health-api">Loading...</td></tr>
+            </table>
+        </div>
+        <div class="card">
+            <h2>System Resources</h2>
+            <table>
+                <tr><td>CPU Usage</td><td class="metric" id="res-cpu">0%</td></tr>
+                <tr><td>RAM Usage</td><td class="metric" id="res-ram">0 MB</td></tr>
+            </table>
+        </div>
+        <div class="card">
+            <h2>Usage Analytics</h2>
+            <table>
+                <tr><td>Total Queries</td><td class="metric" id="stat-queries">0</td></tr>
+                <tr><td>Error Rate</td><td class="metric" id="stat-errors">0%</td></tr>
+            </table>
+        </div>
+        <div class="card" style="grid-column: 1 / -1;">
+            <h2>Latency Breakdown (ms)</h2>
+            <canvas id="latencyChart" height="100"></canvas>
+        </div>
+    </div>
+
+    <script>
+        let latencyChart;
+
+        async function fetchHealth() {
+            try {
+                const res = await fetch('/api/health');
+                const data = await res.json();
+                document.getElementById('health-api').innerText = 'OK';
+                document.getElementById('health-api').className = 'status-ok';
+            } catch (e) {
+                document.getElementById('health-api').innerText = 'ERROR';
+                document.getElementById('health-api').className = 'status-err';
+            }
+        }
+
+        async function fetchResources() {
+            try {
+                const res = await fetch('/api/system-resources');
+                const data = await res.json();
+                document.getElementById('res-cpu').innerText = data.cpu_percent + '%';
+                document.getElementById('res-ram').innerText = data.ram_mb + ' MB';
+            } catch (e) {
+                console.error(e);
+            }
+        }
+
+        async function fetchMetrics() {
+            try {
+                const res = await fetch('/api/metrics');
+                const data = await res.json();
+                document.getElementById('stat-queries').innerText = data.total_queries || 0;
+                
+                const errRate = data.total_queries > 0 ? ((data.total_errors / data.total_queries) * 100).toFixed(1) : 0;
+                document.getElementById('stat-errors').innerText = errRate + '%';
+                if(errRate > 5) document.getElementById('stat-errors').className = 'metric status-warn';
+
+                // Update Chart
+                if(latencyChart) {
+                    latencyChart.data.labels = data.recent_latencies.map((_, i) => '#' + (i+1));
+                    latencyChart.data.datasets[0].data = data.recent_latencies;
+                    latencyChart.update();
+                } else {
+                    const ctx = document.getElementById('latencyChart').getContext('2d');
+                    latencyChart = new Chart(ctx, {
+                        type: 'line',
+                        data: {
+                            labels: data.recent_latencies.map((_, i) => '#' + (i+1)),
+                            datasets: [{
+                                label: 'LLM Generation Latency (ms)',
+                                data: data.recent_latencies,
+                                borderColor: '#3498db',
+                                tension: 0.1
+                            }]
+                        },
+                        options: { responsive: true }
+                    });
+                }
+            } catch (e) {
+                console.error(e);
+            }
+        }
+
+        function updateAll() {
+            fetchHealth();
+            fetchResources();
+            fetchMetrics();
+        }
+
+        updateAll();
+        setInterval(updateAll, 5000); // Update every 5 seconds
+    </script>
+</body>
+</html>

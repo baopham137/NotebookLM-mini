@@ -13,7 +13,7 @@ class SessionManager:
         self._init_db()
         
     def _get_conn(self):
-        return sqlite3.connect(self.db_path, check_same_thread=False)
+        return sqlite3.connect(self.db_path, check_same_thread=False, timeout=15.0)
         
     def _init_db(self):
         with self._get_conn() as conn:
@@ -36,6 +36,7 @@ class SessionManager:
                     id INTEGER PRIMARY KEY AUTOINCREMENT,
                     notebook_id TEXT,
                     filename TEXT NOT NULL,
+                    status TEXT DEFAULT 'ready',
                     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                     FOREIGN KEY (notebook_id) REFERENCES notebooks (id)
                 )
@@ -63,10 +64,17 @@ class SessionManager:
                     glossary TEXT,
                     quiz TEXT,
                     flashcards TEXT,
+                    mindmap TEXT,
                     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                     FOREIGN KEY (notebook_id) REFERENCES notebooks (id)
                 )
             ''')
+            
+            # Thêm cột mindmap nếu chưa có (migration)
+            try:
+                cursor.execute("ALTER TABLE study_guides ADD COLUMN mindmap TEXT")
+            except sqlite3.OperationalError:
+                pass # Cột đã tồn tại
             
             # Kiểm tra và thêm cột quiz, flashcards nếu bảng đã tồn tại nhưng chưa có cột (schema migration)
             try:
@@ -74,6 +82,13 @@ class SessionManager:
                 cursor.execute("ALTER TABLE study_guides ADD COLUMN flashcards TEXT")
             except sqlite3.OperationalError:
                 pass # Cột đã tồn tại
+                
+            # Migration cho bảng documents (thêm status)
+            try:
+                cursor.execute("ALTER TABLE documents ADD COLUMN status TEXT DEFAULT 'ready'")
+            except sqlite3.OperationalError:
+                pass
+                
             # Migration cho bảng notebooks
             try:
                 cursor.execute("ALTER TABLE notebooks ADD COLUMN is_private BOOLEAN NOT NULL DEFAULT 1")
@@ -84,8 +99,7 @@ class SessionManager:
                 cursor.execute("ALTER TABLE notebooks ADD COLUMN gemini_api_key TEXT")
             except sqlite3.OperationalError:
                 pass
-
-            conn.commit()
+                
 
     # --- API Quản lý Notebooks ---
     def create_notebook(self, notebook_id: str, title: str = "Notebook mới", is_private: bool = True, gemini_api_key: Optional[str] = None):
@@ -129,10 +143,14 @@ class SessionManager:
                 return {"id": row[0], "title": row[1], "is_private": bool(row[2]), "gemini_api_key": row[3], "created_at": row[4]}
             return None
 
-    # --- API Quản lý Tài liệu ---
-    def add_document(self, notebook_id: str, filename: str):
+    def add_document(self, notebook_id: str, filename: str, status: str = "processing"):
         with self._get_conn() as conn:
-            conn.execute("INSERT INTO documents (notebook_id, filename) VALUES (?, ?)", (notebook_id, filename))
+            conn.execute("INSERT INTO documents (notebook_id, filename, status) VALUES (?, ?, ?)", (notebook_id, filename, status))
+            conn.commit()
+            
+    def update_document_status(self, notebook_id: str, filename: str, status: str):
+        with self._get_conn() as conn:
+            conn.execute("UPDATE documents SET status = ? WHERE notebook_id = ? AND filename = ?", (status, notebook_id, filename))
             conn.commit()
 
     def delete_document(self, notebook_id: str, filename: str):
@@ -142,9 +160,9 @@ class SessionManager:
 
     def get_documents(self, notebook_id: str) -> List[Dict]:
         with self._get_conn() as conn:
-            cursor = conn.execute("SELECT id, filename, created_at FROM documents WHERE notebook_id = ? ORDER BY created_at ASC", (notebook_id,))
+            cursor = conn.execute("SELECT id, filename, status, created_at FROM documents WHERE notebook_id = ? ORDER BY created_at ASC", (notebook_id,))
             rows = cursor.fetchall()
-            return [{"id": r[0], "filename": r[1], "created_at": r[2]} for r in rows]
+            return [{"id": r[0], "filename": r[1], "status": r[2], "created_at": r[3]} for r in rows]
 
     # --- API Quản lý Tin nhắn ---
     def save_message(self, notebook_id: str, role: str, content: str, citations: Optional[List[Dict]] = None):
@@ -174,17 +192,17 @@ class SessionManager:
             return history
 
     # --- API Study Guide ---
-    def save_study_guide(self, notebook_id: str, summary: str, faq: str, glossary: str, quiz: str = None, flashcards: str = None):
+    def save_study_guide(self, notebook_id: str, summary: str, faq: str, glossary: str, quiz: str = None, flashcards: str = None, mindmap: str = None):
         with self._get_conn() as conn:
             conn.execute(
-                "INSERT OR REPLACE INTO study_guides (notebook_id, summary, faq, glossary, quiz, flashcards) VALUES (?, ?, ?, ?, ?, ?)",
-                (notebook_id, summary, faq, glossary, quiz, flashcards)
+                "INSERT OR REPLACE INTO study_guides (notebook_id, summary, faq, glossary, quiz, flashcards, mindmap) VALUES (?, ?, ?, ?, ?, ?, ?)",
+                (notebook_id, summary, faq, glossary, quiz, flashcards, mindmap)
             )
             conn.commit()
 
     def get_study_guide(self, notebook_id: str) -> Optional[Dict]:
         with self._get_conn() as conn:
-            cursor = conn.execute("SELECT summary, faq, glossary, quiz, flashcards FROM study_guides WHERE notebook_id = ?", (notebook_id,))
+            cursor = conn.execute("SELECT summary, faq, glossary, quiz, flashcards, mindmap FROM study_guides WHERE notebook_id = ?", (notebook_id,))
             row = cursor.fetchone()
             if row:
                 import json
@@ -203,6 +221,19 @@ class SessionManager:
                     "faq": row[1], 
                     "glossary": row[2],
                     "quiz": quiz_data,
-                    "flashcards": flashcards_data
+                    "flashcards": flashcards_data,
+                    "mindmap": row[5]
                 }
             return None
+
+    def delete_study_guide(self, notebook_id: str):
+        """Xóa Cẩm nang học tập của một Notebook."""
+        with self._get_conn() as conn:
+            conn.execute("DELETE FROM study_guides WHERE notebook_id = ?", (notebook_id,))
+            conn.commit()
+
+    def delete_messages(self, notebook_id: str):
+        """Xóa toàn bộ lịch sử chat của một Notebook."""
+        with self._get_conn() as conn:
+            conn.execute("DELETE FROM messages WHERE notebook_id = ?", (notebook_id,))
+            conn.commit()

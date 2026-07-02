@@ -11,6 +11,7 @@ from concurrent.futures import ThreadPoolExecutor
 from ..utils.config import settings
 from ..ingestion.indexing import VectorStoreManager
 from .bm25_index import get_bm25_index, BM25Document
+from .reranker import CrossEncoderReranker
 
 logger = logging.getLogger(__name__)
 
@@ -87,18 +88,20 @@ def _reciprocal_rank_fusion(
 
 class HybridSearcher:
     """
-    Hybrid Search: chạy song song 2 luồng (Semantic + Keyword), kết hợp bằng RRF.
+    Hybrid Search: chạy song song 2 luồng (Semantic + Keyword), kết hợp bằng RRF,
+    sau đó sử dụng Cross-Encoder để Rerank lại kết quả.
     """
     def __init__(self, vector_store: VectorStoreManager):
         self.vector_store = vector_store
+        self.reranker = CrossEncoderReranker() if settings.use_reranker and settings.reranker_model != "None" else None
 
     def search(
         self,
         query: str,
-        k: int = 15,
+        k: int = 5,
         notebook_id: str = "default",
     ) -> List[Dict[str, Any]]:
-        search_k = k or settings.hybrid_initial_k
+        search_k = settings.hybrid_initial_k
 
         # Chạy song song 2 luồng tìm kiếm
         with ThreadPoolExecutor(max_workers=2) as executor:
@@ -115,4 +118,10 @@ class HybridSearcher:
         # Combine bằng RRF
         fused = _reciprocal_rank_fusion(semantic_results, bm25_results)
         
-        return fused
+        # Chấm điểm lại (Reranking) nếu được bật
+        if self.reranker:
+            final_results = self.reranker.rerank(query, fused, top_k=k)
+        else:
+            final_results = fused[:k]
+            
+        return final_results

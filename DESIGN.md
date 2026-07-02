@@ -2780,126 +2780,53 @@ D:\LLM_mini\
     └── export.py                   <-- Xuất Notebook ra PDF/Markdown
 `
 
-## 17. Tech Stack Đề Xuất (Mức 2 — Airgapped/Offline)
+## 17. Tech Stack Đề Xuất (Native Local Edition)
 
 | Thành phần          | Công nghệ                        | Ghi chú                                               |
 | ------------------- | -------------------------------- | ----------------------------------------------------- |
 | Universal Parser    | Microsoft MarkItDown             | Thay thế hoàn toàn PDF, DOCX, PPTX, XLSX, HTML parser |
 | Markdown Parser     | mistletoe / markdown-it-py       | Phân tích Markdown thành Document Tree AST            |
 | YouTube Transcript  | youtube-transcript-api           |                                                       |
-| ASR (Audio)         | Whisper large-v3 (local)         | Local inference, không cần API                        |
-| **Unified Model ★** | **LLaVA 13B + Ollama**           | ✅ **1 model cho Vision + LLM! Tiết kiệm 50% VRAM**   |
-| **OCR Fallback**    | **Tesseract 5.x**                | Fast text extraction when needed                      |
-| Embedding + Sparse  | BAAI/bge-m3                      | 1 model cho cả dense và sparse                        |
-| Vector Database     | Qdrant (self-hosted Docker)      | Hỗ trợ cả dense và sparse                             |
-| Reranker            | BAAI/bge-reranker-v2-m3          | Cross-encoder ranking model                           |
+| ASR (Audio)         | Whisper (small/base/medium)      | Local inference, chỉ tải On-Demand qua Web UI         |
+| **Unified LLM ★**   | **Qwen 2.5 + llama.cpp**         | ✅ **Offload VRAM tự động, tối ưu cực tốt trên C++**  |
+| **Vision Model**    | **Moondream2 / OCR / Qwen2-VL**  | Tự động cảnh báo và giới hạn dựa trên dung lượng VRAM |
+| Embedding + Sparse  | GreenNode / sBERT                | Lựa chọn động qua Terminal để chống tràn RAM/VRAM     |
+| Vector Database     | Qdrant Local (File-based)        | Chạy trực tiếp qua Python, **không cần Docker**       |
+| Reranker            | BGE-M3 / mMiniLMv2               | Lựa chọn động qua Terminal để chống tràn RAM/VRAM     |
 | API Framework       | FastAPI                          |                                                       |
-| Chunking            | LangChain MarkdownHeaderSplitter |                                                       |
+| Frontend            | React + Vite                     | Cung cấp giao diện trực quan tại localhost:5173       |
 
-### Airgapped Services Setup
+### Khởi động Hệ Thống (Không Docker)
 
-**Qdrant Vector Database:**
-
-```bash
-docker run -d \
-  --name qdrant \
-  -p 6333:6333 \
-  -v $(pwd)/qdrant_storage:/qdrant/storage \
-  qdrant/qdrant
-```
-
-**Ollama Vision Model Server (LLaVA):**
-
-```bash
-# Native install
-curl -fsSL https://ollama.ai/install.sh | sh
-ollama pull llava:13b
-ollama serve  # Listens on http://localhost:11434
-```
-
-Hoặc **Docker:**
-
-```bash
-docker run -d \
-  --gpus all \
-  -p 11434:11434 \
-  --name ollama_vision \
-  -v ollama_models:/root/.ollama \
-  ollama/ollama:latest
-
-docker exec ollama_vision ollama pull llava:13b
-```
-
-**Tesseract OCR Setup:**
-
-```bash
-# Ubuntu/Debian
-sudo apt-get install tesseract-ocr
-
-# macOS
-brew install tesseract
-
-# Windows
-# Download: https://github.com/UB-Mannheim/tesseract/wiki
-```
+Thay vì phải cài đặt Docker cồng kềnh, hệ thống sử dụng cơ chế **Native Venv**:
+1. Người dùng chạy `run.bat` (Windows) hoặc `run_mac.command` (Mac).
+2. `hardware_profiler.py` tự động quét RAM/VRAM và tạo Menu cho phép người dùng chọn mô hình (LLM, Embedding, Reranker).
+3. `launcher.py` tự động tạo Virtual Environment, cài đặt thư viện PyTorch (CPU hoặc CUDA tùy máy) và bật máy chủ Web + LLM.
 
 ---
 
-## Tổng Kết — Nguyên Tắc Thiết Kế
+## Tổng Kết — Nguyên Tắc Thiết Kế Mới
 
 1. **Extractor chỉ trích xuất sự thật (facts).** Layout Parser mới suy luận ý nghĩa (semantics).
-
 2. **Document Tree là định dạng nội bộ quan trọng nhất.** Markdown chỉ là export format để giao tiếp với LLM.
-
-3. **Metadata không bao giờ bị mất.** Mỗi chunk kế thừa toàn bộ document metadata và bổ sung thêm chunk-level metadata.
-
-4. **`section_path` lưu toàn bộ hierarchy**, không chỉ section nhỏ nhất.
-
-5. **`text` luôn được lưu trong payload** của Qdrant để retrieve xong có thể gửi ngay cho LLM.
-
-6. **Dense và Sparse không phải hai database riêng.** Dùng Qdrant Hybrid Collection cho mức 2.
-
-7. **Chunk text tồn tại ở cả hai nơi:** trong payload của Qdrant (để serve LLM) và có thể trong một document store riêng (SQLite) nếu cần tìm kiếm nhanh theo `chunk_id`.
-
-8. **Citation là first-class citizen.** Mọi chunk đều có đủ metadata để tạo citation chính xác tới trang, section, figure, table, hay timestamp.
+3. **Bảo vệ RAM/VRAM tuyệt đối.** Các mô hình nặng (Ảnh/Âm thanh) sẽ không bao giờ được tải ngầm. Chúng chỉ được kích hoạt (On-Demand) khi người dùng upload file tương ứng, và sẽ bị chặn lại nếu phần cứng không đủ đáp ứng.
+4. **Không Docker, Không Ảo Hóa.** Mọi thứ chạy Native trên Python và C++ để vắt kiệt 100% hiệu năng của phần cứng cá nhân.
 
 ---
 
-## Airgapped Checklist
+## 18. Đánh Giá Kiến Trúc Tổng Thể (Pros & Cons)
 
-Để đảm bảo hệ thống hoàn toàn offline (không kết nối Internet):
-
-- ✅ **Vision Processing:** LLaVA (Ollama) + Tesseract ← Local inference
-- ✅ **LLM Generation:** Ollama (Mistral/Llama) ← Local inference
-- ✅ **Embeddings:** BGE-M3 ← Downloaded once, runs local
-- ✅ **Vector DB:** Qdrant ← Self-hosted Docker
-- ✅ **Data Storage:** Persistent volumes ← No cloud sync
-- ✅ **Transcription:** Whisper ← Local model
-- ⚠️ **YouTube/Google APIs:** Not supported in pure offline mode
-  - Alternative: ingest transcript files manually
-
----
-
-_DESIGN.md — NotebookLM Clone v1.1 (Airgapped Edition)_
-
----
-
----
-
-## 18. Đánh Giá Kiến Trúc Tổng Thể (Pros & Cons của Phiên bản Hoàn chỉnh)
-
-Sự kết hợp giữa tài liệu Kiến trúc (DESIGN 1) và Cấu trúc Code (DESIGN gốc) tạo nên một bản thiết kế cấp Production. Việc mở rộng thư mục `src/ingestion/parsers/` để bao phủ toàn bộ 13 định dạng giúp hệ thống trở thành một "NotebookLM thực thụ".
+Sự chuyển dịch từ kiến trúc Docker/Ollama sang kiến trúc **Native Local (llama.cpp + FastAPI + File-based Qdrant)** là một bước tiến mang tính cách mạng cho dự án NotebookLM Mini.
 
 ### Ưu Điểm (Pros)
-1. **Khả năng mở rộng (Extensibility) xuất sắc:** Bằng cách tách riêng thư mục `parsers/`, khi cần hỗ trợ định dạng mới (VD: ePub), chỉ cần viết thêm `epub_parser.py` mà không phải sửa lõi hệ thống.
-2. **Bảo mật tuyệt đối (100% Offline/Airgapped):** Dùng LLaVA (Vision), Whisper (Audio) và Qdrant local giúp đảm bảo toàn bộ dữ liệu (tài liệu, âm thanh, hình ảnh) không bao giờ rời khỏi thiết bị.
-3. **Chất lượng truy xuất (Recall) toàn diện:** Việc biến mọi nguồn dữ liệu (từ video YouTube đến file Excel) về cùng một định dạng **Document Tree -> Markdown Canonical** kết hợp Hybrid Search (Dense + Sparse/BM25) và Reranker bảo đảm AI có thể tìm và hiểu chéo thông tin giữa một video và một file PDF dễ dàng.
-4. **Xử lý Đa phương thức (Multimodal) Thống nhất:** Thay vì dùng OCR truyền thống rườm rà, kiến trúc dùng LLaVA làm "Vision Parser" giúp trích xuất trực tiếp ngữ nghĩa của biểu đồ, sơ đồ.
+1. **Khả năng tiếp cận vô song (Plug & Play):** Việc loại bỏ Docker giúp bất kỳ ai (dù không rành IT) cũng có thể nhấp đúp file `.bat` để chạy phần mềm. 
+2. **Bảo mật tuyệt đối (100% Offline/Airgapped):** Toàn bộ dữ liệu nằm trên ổ cứng người dùng.
+3. **Tối ưu Phần Cứng Cực Hạn:** `llama.cpp` cho phép chạy các mô hình lớn (như Qwen 14B) ngay cả khi VRAM rất nhỏ (bằng cách offload sang RAM thường). Cơ chế kiểm soát VRAM tự động hạ cấp các mô hình vệ tinh (Embedding/Reranker) xuống CPU giúp tránh crash hệ thống.
+4. **On-Demand Loading:** Xử lý Đa phương thức (Multimodal) khôn ngoan bằng cách chỉ nạp mô hình Vision/Audio khi có tín hiệu từ người dùng.
 
 ### Nhược Điểm & Thách Thức (Cons & Limitations)
-1. **Quản trị Dependency & Môi trường cực kì phức tạp:** Để chạy được Whisper (Audio), LLaVA (Vision), Youtube-Transcript-Api (YouTube), và Playwright (Web Parser) trong cùng một project offline sẽ khiến file `requirements.txt` và `Dockerfile` rất khổng lồ. Rủi ro xung đột thư viện CUDA/PyTorch là rất cao.
-2. **Tiêu Tốn Tài Nguyên Phần Cứng (Hardware-Intensive):** Phải tải sẵn nhiều mô hình (Embedding model, Reranker model, LLaVA 13B, Whisper) vào RAM/VRAM. Yêu cầu thiết bị tốn ít nhất 12-16GB VRAM để chạy mượt mà tất cả các pipeline.
-3. **Nút Thắt Tốc Độ ở Ingestion:** Xử lý Vision Offline (2-5 giây/ảnh) và Audio Offline (Whisper) rất chậm. Nếu ingest một video YouTube dài 2 tiếng và 1 PDF chứa 100 biểu đồ, hệ thống sẽ mất rất lâu mới index xong, khác xa tốc độ realtime của API cloud.
-4. **Bảo trì Web/YouTube Parser:** Các trang web và YouTube thường xuyên thay đổi cấu trúc HTML hoặc cơ chế chống bot. Các parser nội bộ cần cập nhật liên tục nếu không sẽ hỏng (breaking changes).
+1. **Phụ thuộc vào Internet ở lần chạy đầu:** Quá trình tải các file model `.gguf` (khoảng 3GB-10GB) tốn nhiều băng thông.
+2. **Xử lý Ingestion Chậm trên Máy Yếu:** Chuyển văn bản thành Vector (Embedding) và trích xuất Âm thanh (Whisper) bằng CPU sẽ khá chậm so với GPU.
+3. **Bảo trì Web/YouTube Parser:** Các trang web và YouTube thường xuyên thay đổi cấu trúc HTML hoặc cơ chế chống bot.
 
-**Kết luận:** Bản thiết kế hoàn chỉnh này biến dự án từ một "demo pipeline" nhỏ lẻ thành một **Nền tảng RAG Đa phương thức Cấp Doanh nghiệp**. Đổi lại, kỹ sư cần giải quyết triệt để bài toán tối ưu phần cứng và quản lý dependency bằng Docker.
+**Kết luận:** Bản thiết kế này đã phá bỏ rào cản của những hệ thống AI cồng kềnh, mang lại trải nghiệm **RAG đa phương thức cấp doanh nghiệp** gói gọn trong một chiếc Laptop cá nhân yếu ớt.

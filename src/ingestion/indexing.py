@@ -8,8 +8,7 @@ from ..utils.config import settings
 class VectorStoreManager:
     """Quản lý việc lưu trữ Vector vào Qdrant Local."""
     
-    def __init__(self, embedder):
-        self.embedder = embedder
+    def __init__(self):
         
         # Tạo thư mục chứa database nếu chưa có
         os.makedirs(settings.storage_dir, exist_ok=True)
@@ -19,7 +18,9 @@ class VectorStoreManager:
         self.collection_name = settings.qdrant_collection
         
         # Test 1 embedding để lấy vector size
-        dummy_vector = self.embedder.embed_query("test")
+        from src.utils.vram_orchestrator import get_orchestrator
+        embedder = get_orchestrator().get_embedder()
+        dummy_vector = embedder.embed_query("test")
         self.vector_size = len(dummy_vector)
         
         self._init_collection()
@@ -44,8 +45,10 @@ class VectorStoreManager:
             return
             
         print(f"[Qdrant] Đang tính toán Vector cho {len(chunks)} đoạn văn bản...")
+        from src.utils.vram_orchestrator import get_orchestrator
+        embedder = get_orchestrator().get_embedder()
         texts = [chunk["content"] for chunk in chunks]
-        embeddings = self.embedder.embed_documents(texts)
+        embeddings = embedder.embed_documents(texts)
         
         points = []
         for i, chunk in enumerate(chunks):
@@ -103,8 +106,10 @@ class VectorStoreManager:
     def search(self, query: str, limit: int = 5, notebook_id: str = None) -> List[Dict[str, Any]]:
         """Tìm kiếm dữ liệu tương tự."""
         from qdrant_client.http.models import Filter, FieldCondition, MatchValue
+        from src.utils.vram_orchestrator import get_orchestrator
+        embedder = get_orchestrator().get_embedder()
         
-        query_vector = self.embedder.embed_query(query)
+        query_vector = embedder.embed_query(query)
         
         query_filter = None
         if notebook_id:

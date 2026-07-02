@@ -1,119 +1,61 @@
-# 📓 NotebookLM-Mini (Local AI Edition)
+# 📓 NotebookLM-Mini (Native Local Edition)
 
-NotebookLM-Mini là một trợ lý học tập cá nhân dựa trên kiến trúc **Retrieval-Augmented Generation (RAG)**. Phiên bản này đã được thiết kế lại hoàn toàn để chạy **100% Offline (Không cần Internet)** sử dụng trí tuệ nhân tạo cục bộ (Local AI), đảm bảo bảo mật tuyệt đối dữ liệu cá nhân của bạn.
+NotebookLM-Mini là một trợ lý học tập cá nhân dựa trên kiến trúc **Retrieval-Augmented Generation (RAG)**. Ở phiên bản mới nhất, hệ thống đã loại bỏ hoàn toàn sự cồng kềnh của Docker, thay vào đó sử dụng kiến trúc **Native Local (llama.cpp + FastAPI + React)**. Nhờ vậy, dự án có thể chạy trực tiếp trên hệ điều hành của bạn với dung lượng RAM/VRAM được tối ưu hóa đến mức tối đa.
 
-Dự án cho phép bạn tải lên tài liệu cá nhân (PDF, DOCX, PPTX, HTML...), tự động phân tích và tương tác qua:
-- 💬 **Hỏi đáp siêu tốc** với trích dẫn chính xác.
-- 📝 **Tóm tắt thông minh** sử dụng kỹ thuật Map-Reduce.
-- 🎯 **Tạo bài trắc nghiệm (Quiz) & Flashcards** tự động để ôn tập.
-
----
-
-## 🌟 Tính Năng Nổi Bật
-
-1. **🚀 1-Click Run (Chạy 1 chạm):** Tự động hóa hoàn toàn quá trình tải Model và cấu hình hệ thống trên cả Windows và macOS. Không cần biết code vẫn chạy được!
-2. **🧠 Local AI Cực Mạnh:** Sử dụng mô hình `Qwen2.5-3B-Instruct` dạng nén GGUF qua Llama.cpp. Đủ thông minh để hiểu tiếng Việt xuất sắc, nhưng đủ nhẹ để chạy trên máy RAM 8GB.
-3. **⚡ Hardware Acceleration (Ép xung phần cứng):** Tự động nhận diện và tận dụng tối đa sức mạnh của **Apple Silicon (Metal)** trên Mac và **Card rời NVIDIA (CUDA 12.1)** trên Windows.
-4. **🔍 Hybrid Search & Reranking:** Kết hợp tìm kiếm ngữ nghĩa (GreenNode) và từ khóa (BM25), sau đó lọc lại bằng Cross-Encoder (BAAI Reranker) để đảm bảo không trượt phát nào.
+Dự án cho phép bạn tải lên tài liệu cá nhân (PDF, DOCX, TXT, Hình ảnh, Âm thanh...), tự động phân tích và tương tác qua:
+- 💬 **Hỏi đáp siêu tốc** với RAG (Qdrant Vector Database + BM25).
+- 📝 **Tóm tắt thông minh** tự động ngay khi tải tài liệu.
+- 🎯 **Tạo bài trắc nghiệm (Quiz)** & **Flashcards** để ôn tập kiến thức.
+- 🎙️ **Podcast** sinh từ tài liệu (Text-to-Audio).
 
 ---
 
-## 📖 HƯỚNG DẪN SỬ DỤNG CHI TIẾT
+## 🌟 Tính Năng Nổi Bật Của Kiến Trúc Mới
 
-### 1. Yêu Cầu Cấu Hình Máy
-- **RAM:** Tối thiểu 8GB (Khuyến nghị 16GB để mượt mà nhất).
-- **Hệ điều hành:** Windows 10/11 hoặc macOS (Khuyên dùng dòng chip Apple M1, M2, M3...).
-- **Ổ cứng:** Trống ít nhất 5GB (để lưu trữ AI Model và dữ liệu vector).
-- **Mạng internet:** Chỉ cần mạng cho **lần chạy đầu tiên** để tải AI (Khoảng 2GB). Sau đó có thể tắt mạng chạy Offline hoàn toàn.
+1. **🚀 1-Click Run (Khởi động 1 chạm):** Chỉ cần chạy file `run.bat` (Windows) hoặc `run_mac.command` (Mac). Hệ thống sẽ tự động tạo môi trường ảo (Virtual Environment), tải AI và chạy phần mềm mà không cần bạn phải cấu hình biến môi trường phức tạp.
+2. **🧠 Nhận diện phần cứng thông minh:** Cửa sổ Terminal sẽ cho phép bạn chọn mức độ nặng/nhẹ của mô hình LLM (Qwen 2.5), mô hình Embedding và Reranker để phù hợp nhất với cấu hình máy của bạn (Từ Laptop văn phòng 4GB RAM đến PC Gaming đỉnh cao).
+3. **🛡️ Bảo vệ VRAM tuyệt đối:** Hệ thống RAG được thiết kế để tự động lùi về chạy trên CPU nếu VRAM của bạn thấp (<= 6GB), nhường toàn bộ sức mạnh Card đồ họa cho LLM để tốc độ gõ chữ đạt mức cao nhất.
+4. **👁️ Tải AI Thị Giác & Âm Thanh On-Demand:** Các mô hình phân tích Ảnh (OCR/Moondream) và Âm thanh (Whisper) sẽ không bị tải dư thừa từ đầu. Khi bạn Upload ảnh hoặc âm thanh, Web UI mới hiện ra bảng chọn và tư vấn mô hình phù hợp dựa trên phần cứng.
 
-### 2. Cài Đặt & Khởi Động (Chỉ với 1 cú click)
+---
 
-**Đối với người dùng Mac (macOS):**
-1. Giải nén/Tải thư mục dự án này về máy.
-2. Tìm file có tên `run_mac.command` và **nhấp đúp chuột**.
-3. Cửa sổ Terminal màu đen sẽ hiện lên. Nếu là lần đầu, hệ thống sẽ mất 1-2 phút để tải bộ não AI về máy.
-4. Giao diện Web (Streamlit) sẽ tự động mở ra ở trình duyệt khi hệ thống sẵn sàng.
+## 📖 HƯỚNG DẪN CÀI ĐẶT VÀ SỬ DỤNG
 
+### 1. Yêu Cầu Cài Đặt Ban Đầu
+- Máy tính đã cài sẵn **Python 3.10+**.
+- Kết nối Internet (chỉ cần trong lần chạy đầu tiên để tải mã nguồn và mô hình AI).
+
+### 2. Khởi Động Dự Án (Lần đầu tiên)
 **Đối với người dùng Windows:**
-1. Cài đặt Python 3.10+ (Nhớ tick vào ô *"Add Python to PATH"* lúc cài).
-2. Giải nén/Tải thư mục dự án này về máy.
-3. Tìm file có tên `run_windows.bat` và **nhấp đúp chuột**. 
-4. Hệ thống sẽ tự cài cấu hình (nếu có Card NVIDIA sẽ tự kích hoạt nhân CUDA). Trình duyệt Web sẽ tự động mở lên.
+1. Nhấp đúp chuột vào file `run.bat`.
+2. Terminal sẽ hiện ra. Bạn sẽ được hỏi 3 câu hỏi để cá nhân hóa phần mềm:
+   - Chọn kích cỡ **Bộ não LLM (Qwen 2.5)**.
+   - Chọn **Mô hình Embedding (GreenNode hoặc sBERT)**.
+   - Chọn **Mô hình Reranker (BGE-M3 hoặc mMiniLM)**.
+3. Chờ phần mềm tự động tải các mô hình này về máy. (Quá trình này tùy thuộc vào tốc độ mạng của bạn, dao động từ 5 phút - 20 phút).
+4. Sau khi tải xong, trình duyệt web sẽ tự động mở lên tại địa chỉ: `http://localhost:5173`.
+
+**Đối với người dùng Mac:**
+- Mở Terminal, trỏ vào thư mục dự án và chạy: `./run_mac.command`.
+
+### 3. Từ lần chạy thứ 2 trở đi
+- Bạn chỉ việc nhấp đúp lại vào file `run.bat`.
+- Hệ thống sẽ nhận diện là máy đã cài đặt xong, nó sẽ trực tiếp khởi động máy chủ (Backend + LLM) chưa tới 10 giây và mở trình duyệt web cho bạn.
 
 ---
 
-### 3. Cách Thao Tác Trực Tiếp Trên Web
+## 🛠️ HƯỚNG DẪN DÀNH CHO LẬP TRÌNH VIÊN (Developer)
 
-#### Bước 1: Tạo thẻ làm việc (Notebook)
-- Ngay khi vào màn hình chính, gõ tên cho Thẻ (Ví dụ: *Luật Kinh Tế* hoặc *Giáo trình AI*) và ấn **+ Tạo Thẻ Mới**.
-- Hệ thống hỗ trợ nhiều Thẻ (Notebook) độc lập. Dữ liệu Thẻ này không bị lẫn vào Thẻ kia.
+Nếu bạn muốn chỉnh sửa code của hệ thống, kiến trúc đã được tách bạch rõ ràng:
 
-#### Bước 2: Tải tài liệu lên
-- Bấm vào tên Thẻ bạn vừa tạo.
-- Ở cột menu bên tay trái, tìm khu vực **Nguồn (Tài liệu đã nạp)**.
-- Kéo thả file PDF, DOCX, hoặc PPTX vào ô tải lên. Hệ thống sẽ mất vài giây để đọc, cắt nhỏ và phân tích nội dung lưu vào não bộ.
+- **Frontend:** Code React (Vite) nằm trong thư mục `frontend/`. 
+  - Chạy môi trường phát triển: `cd frontend && npm run dev`.
+  - Đóng gói: `npm run build`. 
+  Lưu ý: Bạn không cần phải bật dev server của frontend nếu chỉ muốn xài, vì backend tự động phục vụ file tĩnh của Frontend tại cổng 8000.
 
-#### Bước 3: Tương tác với tài liệu
-Ở giữa màn hình có 4 tab tính năng chính:
-
-1. **💬 Hỏi đáp (Chat):**
-   - Đặt bất kỳ câu hỏi nào liên quan đến tài liệu.
-   - AI sẽ mất khoảng 4-8 giây để "đọc tài liệu" (xoay vòng tròn) và sau đó sẽ gõ chữ trả lời cực nhanh. Cuối câu trả lời sẽ có trích dẫn nguồn cụ thể (Trích từ file nào).
-   
-2. **📝 Tóm tắt:**
-   - Ấn một nút, AI sẽ tự động đọc lướt toàn bộ tài liệu bạn đã tải lên, tóm tắt các ý chính và gạch đầu dòng những điểm quan trọng nhất.
-
-3. **🧠 Trắc nghiệm (Quiz):**
-   - AI sẽ tự động soi tài liệu và tạo ra 1 bộ câu hỏi trắc nghiệm A-B-C-D. Bạn có thể tự test kiến thức của mình và xem đáp án giải thích ngay bên dưới.
-
-4. **⚡ Flashcards:**
-   - Tạo ra các thẻ lật (Mặt trước câu hỏi - Mặt sau khái niệm) để bạn học thuộc lòng từ vựng hoặc khái niệm nhanh chóng.
+- **Backend:** Code FastAPI nằm trong thư mục `src/`.
+  - Bạn có thể xem Log của Backend ngay tại cửa sổ Terminal khi `run.bat` đang chạy để theo dõi quá trình phân tích RAG và Ingestion.
+  - Cấu hình thiết lập được lưu trữ trong file `.env` ẩn tại thư mục gốc. Bạn có thể mở file này để thay đổi `RAG_EMBEDDING_MODEL` hoặc `RAG_RERANKER_MODEL` sang bất kỳ mô hình HuggingFace nào bạn thích.
 
 ---
-
-### 4. Xử Lý Lỗi Thường Gặp (Troubleshooting)
-
-- **Lỗi Terminal báo "Connection refused" / "Lỗi từ Backend":** 
-  Do bạn lỡ tắt cửa sổ Terminal màu đen (cái cửa sổ đang gánh cái Backend của AI). Đừng bao giờ tắt nó khi đang xài web! Để sửa, hãy đóng web đi và nhấp đúp chạy lại file `run_mac.command` / `run_windows.bat`.
-  
-- **Trả lời có vẻ hơi chậm?**
-  Mô hình AI này là 3 Tỷ tham số, nên quá trình "tiêu hoá" hàng nghìn chữ trong tài liệu ở 3-5 giây đầu tiên sẽ khá nặng. Hãy kiên nhẫn đợi 1 chút, khi nó đã suy nghĩ xong thì tốc độ nhả chữ sẽ rất nhanh. Trên Windows, nếu có Card NVIDIA, tốc độ sẽ khủng khiếp hơn nhiều.
-  
-- **Trình duyệt không tự mở?**
-  Bạn hãy mở Chrome/Safari và tự gõ đường dẫn: `http://localhost:8501`.
-
----
-
-## 🏗️ Kiến Trúc Hệ Thống (Dành cho Developer)
-
-```text
-┌─────────────────────────────────────────────────────────────────────┐
-│  Tầng Giao diện & Định tuyến API                                    │
-│  ┌──────────────────────┐  ┌──────────────────────────────────┐     │
-│  │  Streamlit Web UI    │◄─►│  FastAPI Backend (SSE Support)  │     │
-│  └──────────────────────┘  └──────────┬───────────────────────┘     │
-└───────────────────────────────────────┬─────────────────────────────┘
-                                        ▼
-┌─────────────────────────────────────────────────────────────────────┐
-│  Tầng Trí Tuệ Nhân Tạo (Local AI Engine)                            │
-│  ┌──────────────────────┐  ┌──────────────────────────────────┐     │
-│  │ Llama.cpp Engine     │  │ Qwen2.5-3B-Instruct (GGUF 4-bit) │     │
-│  │ (Metal / CUDA 12)    │  │ 100% Offline, Privacy First      │     │
-│  └──────────┬───────────┘  └──────────────────────────────────┘     │
-└─────────────┼───────────────────────────────────────────────────────┘
-              ▼
-┌─────────────────────────────────────────────────────────────────────┐
-│  Tầng Xử lý Dữ liệu & RAG Pipeline                                  │
-│  ┌────────────────┐  ┌───────────────┐  ┌──────────────────────┐    │
-│  │ MarkItDown     │─►│ Hybrid Search │─►│ Cross-Encoder        │    │
-│  │ Parser (OCR)   │  │ (Qdrant+BM25) │  │ Reranker (BGE-m3)    │    │
-│  └────────────────┘  └───────────────┘  └──────────────────────┘    │
-└─────────────────────────────────────────────────────────────────────┘
-```
-
-Bạn có thể thay đổi cách hệ thống hoạt động thông qua file `.env` ẩn:
-- `RAG_LLM_TEMPERATURE`: Khuyên dùng 0.4 - 0.6.
-- `RAG_HYBRID_INITIAL_K` và `RAG_HYBRID_RERANK_K`: Số đoạn văn lấy ra, giảm xuống sẽ đẩy nhanh tốc độ đọc.
-
----
-*Dự án tối ưu hóa trải nghiệm Local AI 1-Click.*
+*Dự án NotebookLM Mini - Đóng gói mượt mà, siêu việt trên máy tính cá nhân.*

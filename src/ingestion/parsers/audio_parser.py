@@ -14,16 +14,36 @@ class AudioParser:
     def _load_model(self):
         if self.model is None:
             try:
-                import whisper
-                print(f"[AudioParser] Đang tải mô hình Whisper ({self.model_size})...")
-                # Suppress FP16 warning on CPU
-                with warnings.catch_warnings():
-                    warnings.simplefilter("ignore")
-                    self.model = whisper.load_model(self.model_size)
+                # [Dự phòng] Thử nạp FFmpeg nếu bước Launcher bị bỏ qua
+                import subprocess
+                import platform
+                try:
+                    subprocess.run(["ffmpeg", "-version"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, check=True)
+                except (FileNotFoundError, subprocess.CalledProcessError):
+                    print("[AudioParser] Chưa tìm thấy FFmpeg, đang thử tải và cấu hình dự phòng...")
+                    import imageio_ffmpeg
+                    ffmpeg_exe = imageio_ffmpeg.get_ffmpeg_exe()
+                    if ffmpeg_exe and os.path.exists(ffmpeg_exe):
+                        os.environ["PATH"] = os.path.dirname(ffmpeg_exe) + os.pathsep + os.environ.get("PATH", "")
+                        print("[AudioParser] Đã nạp xong FFmpeg dự phòng!")
+            except Exception as e:
+                print(f"[AudioParser] Cảnh báo cấu hình FFmpeg dự phòng: {e}")
+
+            try:
+                from src.utils.vram_orchestrator import get_orchestrator
+                self.model = get_orchestrator().get_whisper(self.model_size)
+                if self.model is None:
+                    raise RuntimeError("Không thể tải model Whisper thông qua VRAM Orchestrator.")
             except ImportError:
                 raise ImportError("Thư viện openai-whisper chưa được cài đặt. Chạy lệnh: pip install openai-whisper")
             except Exception as e:
                 raise RuntimeError(f"Lỗi khởi tạo Whisper model: {e}\n(Bạn đã cài đặt ffmpeg trên máy chưa?)")
+
+    def unload(self):
+        """Xả mô hình Whisper khỏi bộ nhớ thông qua Orchestrator."""
+        from src.utils.vram_orchestrator import get_orchestrator
+        get_orchestrator().release_whisper()
+        self.model = None
 
     def _group_segments_into_paragraphs(self, segments: List[Dict], max_duration: float = 30.0) -> List[Dict]:
         """Gộp các đoạn âm thanh ngắn thành các đoạn văn dài hơn."""

@@ -15,7 +15,7 @@ class PodcastGenerator:
         self.output_dir = "storage/podcasts"
         os.makedirs(self.output_dir, exist_ok=True)
 
-    def generate_podcast(self, notebook_id: str, is_private: bool) -> str:
+    def generate_podcast(self, notebook_id: str, is_private: bool, style: str = "normal", gemini_api_key: str = None) -> str:
         """Sinh Podcast MP3 dựa trên Study Guide."""
         guide = self.db.get_study_guide(notebook_id)
         if not guide:
@@ -25,16 +25,28 @@ class PodcastGenerator:
         faq = guide.get('faq', '')
         
         # 1. Sinh kịch bản bằng LLM Local
+        
+        if style == "debate":
+            style_prompt = "Hãy viết kịch bản dạng TRANH BIỆN GẮT GAO. Host A ủng hộ quan điểm trong tài liệu, Host B kịch liệt phản đối và bắt bẻ. Hai bên tranh luận nảy lửa."
+            sys_prompt = "Bạn là biên kịch viết lời thoại Podcast Tranh Biện cực gắt."
+        elif style == "sarcastic":
+            style_prompt = "Hãy viết kịch bản dạng HÀI HƯỚC, CÀ KHỊA. Hai Host dùng nhiều từ lóng Gen Z, mỉa mai những điểm vô lý hoặc tóm tắt tài liệu theo cách buồn cười nhất có thể."
+            sys_prompt = "Bạn là biên kịch viết lời thoại Podcast Hài hước Gen Z."
+        else:
+            style_prompt = "Hãy viết một kịch bản giao lưu Podcast ngắn gọn, dễ hiểu, thân thiện."
+            sys_prompt = "Bạn là biên kịch viết lời thoại Podcast chuyên nghiệp."
+            
         prompt = (
             f"Dưới đây là tài liệu tóm tắt:\n{summary}\n\nCác câu hỏi thường gặp:\n{faq}\n\n"
-            f"Hãy viết một kịch bản giao lưu Podcast ngắn (khoảng 5-8 câu) giữa 2 người (Host A - Nam, Host B - Nữ). "
+            f"{style_prompt}\n"
+            f"Kịch bản dài khoảng 6-10 câu giữa 2 người (Host A - Nam, Host B - Nữ). "
             f"Định dạng NGHIÊM NGẶT như sau, không viết thêm bất cứ giải thích nào khác:\n"
             f"A: [Lời thoại của A]\n"
             f"B: [Lời thoại của B]\n"
         )
         
-        logger.info("Đang sinh kịch bản Podcast...")
-        script_raw = "".join(self.llm.generate(prompt, system_prompt="Bạn là biên kịch viết lời thoại Podcast chuyên nghiệp."))
+        logger.info(f"Đang sinh kịch bản Podcast (Style: {style})...")
+        script_raw = "".join(self.llm.generate(prompt, system_prompt=sys_prompt, is_private=is_private, gemini_api_key=gemini_api_key))
         
         # 2. Parse kịch bản
         lines = script_raw.split('\n')
@@ -130,3 +142,46 @@ class PodcastGenerator:
         # Dọn dẹp
         for f in temp_files:
             if os.path.exists(f): os.remove(f)
+
+    def generate_custom_podcast(self, notebook_id: str, context: str, topic: str, language: str, is_private: bool, gemini_api_key: str = None) -> str:
+        """Sinh Podcast MP3 dựa trên cấu hình tùy chỉnh."""
+        prompt = (
+            f"Dưới đây là tài liệu:\n{context[:10000]}\n\n"
+            f"Hãy viết một kịch bản giao lưu Podcast ngắn gọn, thân thiện bằng ngôn ngữ '{language}'.\n"
+            f"Chủ đề tập trung: {topic}\n"
+            f"Kịch bản dài khoảng 6-10 câu giữa 2 người (Host A - Nam, Host B - Nữ). "
+            f"Định dạng NGHIÊM NGẶT như sau, không viết thêm bất cứ giải thích nào khác:\n"
+            f"A: [Lời thoại của A]\n"
+            f"B: [Lời thoại của B]\n"
+        )
+        
+        logger.info(f"Đang sinh kịch bản Podcast tùy chỉnh...")
+        script_raw = "".join(self.llm.generate(prompt, system_prompt="Bạn là biên kịch viết lời thoại Podcast chuyên nghiệp.", is_private=is_private, gemini_api_key=gemini_api_key))
+        
+        # Parse kịch bản
+        lines = script_raw.split('\n')
+        dialogues = []
+        for line in lines:
+            if line.startswith('A:') or line.startswith('Host A:'):
+                dialogues.append(('A', line.split(':', 1)[1].strip()))
+            elif line.startswith('B:') or line.startswith('Host B:'):
+                dialogues.append(('B', line.split(':', 1)[1].strip()))
+                
+        if not dialogues:
+            raise ValueError("LLM không sinh ra kịch bản đúng định dạng.")
+            
+        output_filename = f"{notebook_id}_{uuid.uuid4().hex[:8]}.mp3"
+        output_path = os.path.join(self.output_dir, output_filename)
+        
+        # Sinh audio thực tế (tương tự method trên)
+        if is_private:
+            self._generate_offline(dialogues, output_path)
+        else:
+            loop = asyncio.new_event_loop()
+            asyncio.set_event_loop(loop)
+            try:
+                loop.run_until_complete(self._generate_online(dialogues, output_path))
+            finally:
+                loop.close()
+            
+        return f"/api/podcasts/{output_filename}"

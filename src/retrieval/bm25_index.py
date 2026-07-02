@@ -1,4 +1,4 @@
-﻿"""
+"""
 RankBM25 Inverted Index â€” Táº§ng Kho Tri thá»©c
 In-memory BM25 keyword search with disk persistence.
 """
@@ -159,6 +159,19 @@ class BM25Index:
             logger.error("Failed to load BM25 index: %s", exc)
             return False
 
+    def transaction(self):
+        """Context manager to lock the BM25 index for thread/process-safe operations."""
+        from filelock import FileLock
+        if self._persist_dir is None:
+            import contextlib
+            @contextlib.contextmanager
+            def dummy_lock():
+                yield
+            return dummy_lock()
+            
+        self._persist_dir.mkdir(parents=True, exist_ok=True)
+        return FileLock(self._persist_dir / "bm25.lock", timeout=60)
+
     def clear(self) -> None:
         """Clear the index."""
         self._documents.clear()
@@ -184,6 +197,7 @@ def get_bm25_index(notebook_id: str) -> BM25Index:
 def delete_bm25_folder(notebook_id: str):
     """Delete the BM25 index directory and remove from memory."""
     import shutil
+    from filelock import FileLock
     from src.utils.config import settings
     global _indexes
     
@@ -192,8 +206,10 @@ def delete_bm25_folder(notebook_id: str):
         
     notebook_dir = settings.bm25_dir / notebook_id
     if notebook_dir.exists():
+        lock_path = notebook_dir / "bm25.lock"
         try:
-            shutil.rmtree(notebook_dir)
-            logger.info("Deleted BM25 directory: %s", notebook_dir)
+            with FileLock(lock_path, timeout=10):
+                shutil.rmtree(notebook_dir)
+                logger.info("Deleted BM25 directory: %s", notebook_dir)
         except Exception as exc:
             logger.error("Failed to delete BM25 directory %s: %s", notebook_dir, exc)

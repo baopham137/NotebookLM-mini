@@ -1,6 +1,12 @@
 import { useState, useEffect, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { Send, Bot, User, FileText, ChevronRight, Paperclip, Loader, Headphones, RefreshCw, BookOpen, Brain, Layers, X, Check, XCircle, Trash2, Link as LinkIcon, Plus, ArrowLeft } from 'lucide-react';
+import { Send, Bot, User, FileText, ChevronRight, Paperclip, Loader, Headphones, RefreshCw, BookOpen, Brain, Layers, X, Check, XCircle, Trash2, Link as LinkIcon, Plus, ArrowLeft, AudioLines, Network } from 'lucide-react';
+import QuizConfigModal from '../components/QuizConfigModal';
+import FlashcardConfigModal from '../components/FlashcardConfigModal';
+import PodcastConfigModal from '../components/PodcastConfigModal';
+import MindmapConfigModal from '../components/MindmapConfigModal';
+import ModelSelectionModal from '../components/ModelSelectionModal';
+import Mermaid from '../components/Mermaid';
 
 function Studio() {
   const { id } = useParams();
@@ -9,16 +15,12 @@ function Studio() {
   const [messages, setMessages] = useState([]);
   const [input, setInput] = useState('');
   const [loading, setLoading] = useState(false);
-  const [uploading, setUploading] = useState(false);
   const [studyGuide, setStudyGuide] = useState(null);
   const [documents, setDocuments] = useState([]);
   const [podcastGenerating, setPodcastGenerating] = useState(false);
   const [audioUrl, setAudioUrl] = useState(null);
   
   // Quiz & Flashcard state
-  const [showQuiz, setShowQuiz] = useState(false);
-  const [showFlashcards, setShowFlashcards] = useState(false);
-  const [podcastUrl, setPodcastUrl] = useState(null);
   const [currentFlashcard, setCurrentFlashcard] = useState(0);
   const [flashcardFlipped, setFlashcardFlipped] = useState(false);
   const [quizAnswers, setQuizAnswers] = useState({});
@@ -26,9 +28,15 @@ function Studio() {
   const [evaluating, setEvaluating] = useState(false);
   const [evalResult, setEvalResult] = useState(null);
 
+  // Gamification state removed
+  const [activeFeature, setActiveFeature] = useState(null);
+  const [configModal, setConfigModal] = useState(null); // 'quiz', 'flashcard', 'podcast', 'mindmap'
+  const [modelModalConfig, setModelModalConfig] = useState(null);
+
   const [showUrlInput, setShowUrlInput] = useState(false);
   const [urlInputValue, setUrlInputValue] = useState('');
   const [uploadingDocs, setUploadingDocs] = useState([]);
+  const [notebookNotFound, setNotebookNotFound] = useState(false);
 
   const messagesEndRef = useRef(null);
 
@@ -36,6 +44,20 @@ function Studio() {
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   };
+
+  const handleAddExp = async (amount) => {
+    if (!activeNotebook) return;
+    try {
+      await fetch(`/api/notebooks/${activeNotebook.id}/add-exp`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ amount })
+      });
+    } catch (err) {
+      console.error("Error adding exp", err);
+    }
+  };
+
   useEffect(() => {
     scrollToBottom();
   }, [messages]);
@@ -71,6 +93,8 @@ function Studio() {
             const docs = await docRes.json();
             setDocuments(docs);
           }
+        } else {
+          setNotebookNotFound(true);
         }
       } catch (e) {
         console.error(e);
@@ -79,11 +103,6 @@ function Studio() {
     fetchData();
   }, [id]);
 
-  useEffect(() => {
-    // Note: The logic inside fetchData was called in the previous mount effect.
-    // If you need specific re-fetching logic triggered by activeNotebook change,
-    // implement it here.
-  }, [activeNotebook]);
 
   // Polling Study Guide if it is null AND there are documents
   useEffect(() => {
@@ -109,13 +128,36 @@ function Studio() {
     };
   }, [activeNotebook, studyGuide, documents]);
 
+  // Polling Documents if any is 'processing'
+  useEffect(() => {
+    let intervalId;
+    if (activeNotebook && documents.some(d => d.status === 'processing')) {
+      intervalId = setInterval(async () => {
+        try {
+          const docRes = await fetch(`/api/notebooks/${activeNotebook.id}/documents`);
+          if (docRes.ok) {
+            setDocuments(await docRes.json());
+          }
+        } catch (e) {
+          console.error("Lỗi khi poll documents:", e);
+        }
+      }, 2000);
+    }
+    return () => {
+      if (intervalId) clearInterval(intervalId);
+    };
+  }, [activeNotebook, documents]);
+
   const generatePodcast = async () => {
     setPodcastGenerating(true);
     try {
+      const formData = new FormData();
+      formData.append('notebook_id', activeNotebook.id);
+      formData.append('style', 'normal');
+
       await fetch('/api/podcast/generate', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ notebook_id: activeNotebook?.id || 'default' })
+        body: formData
       });
       setTimeout(() => {
         setAudioUrl(`/api/podcast/audio/${activeNotebook?.id || 'default'}?t=${Date.now()}`);
@@ -188,7 +230,35 @@ function Studio() {
     const file = e.target.files[0];
     if (!file) return;
 
-    setUploading(true);
+    const isImage = file.name.match(/\.(jpg|jpeg|png|gif|webp|bmp)$/i);
+    const isAudio = file.name.match(/\.(mp3|wav|flac|ogg|m4a)$/i);
+
+    if (isImage || isAudio) {
+      try {
+        const statusRes = await fetch('/api/system/models-status');
+        if (statusRes.ok) {
+          const statusData = await statusRes.json();
+          if (isImage && !statusData.vision_configured) {
+            setModelModalConfig({ type: 'vision', fileToUpload: file });
+            e.target.value = null;
+            return;
+          }
+          if (isAudio && !statusData.audio_configured) {
+            setModelModalConfig({ type: 'audio', fileToUpload: file });
+            e.target.value = null;
+            return;
+          }
+        }
+      } catch (err) {
+        console.error("Lỗi khi check model status", err);
+      }
+    }
+
+    proceedWithUpload(file);
+    e.target.value = null;
+  };
+
+  const proceedWithUpload = async (file) => {
     setUploadingDocs(prev => [...prev, { filename: file.name }]);
 
     const formData = new FormData();
@@ -202,7 +272,6 @@ function Studio() {
       });
 
       if (!response.ok) throw new Error('Upload failed');
-      const data = await response.json();
       
       // Cập nhật lại danh sách documents
       const docRes = await fetch(`/api/notebooks/${activeNotebook.id}/documents`);
@@ -213,9 +282,7 @@ function Studio() {
       console.error(err);
       setMessages(prev => [...prev, { role: 'assistant', content: `❌ Lỗi khi tải tệp: ${err.message}`, citations: [] }]);
     } finally {
-      setUploading(false);
       setUploadingDocs(prev => prev.filter(d => d.filename !== file.name));
-      e.target.value = null;
     }
   };
 
@@ -257,7 +324,10 @@ function Studio() {
 
       while (true) {
         const { value, done } = await reader.read();
-        if (done) break;
+        if (done) {
+          handleAddExp(5);
+          break;
+        }
         
         buffer += decoder.decode(value, { stream: true });
         
@@ -340,6 +410,58 @@ function Studio() {
     }
   };
 
+  const handleFeatureClick = (feature) => {
+    if (documents.length === 0) {
+      alert("Bạn chưa nạp tài liệu. Vui lòng tải lên tài liệu hoặc thêm link để sử dụng tính năng này!");
+      return;
+    }
+    
+    // Nếu click lại vào tab đang mở thì đóng nó lại
+    if (activeFeature === feature) {
+      setActiveFeature(null);
+      return;
+    }
+
+    // Kiểm tra xem dữ liệu đã có chưa, nếu chưa có thì tự động tạo với cấu hình mặc định
+    if (feature === 'quiz' && (!studyGuide?.quiz || studyGuide.quiz.length === 0)) {
+      handleCustomGenerate('quiz', {
+        topic: "Tổng hợp toàn bộ kiến thức",
+        difficulty: "Vừa",
+        language: "Tiếng Việt",
+        quantity: 10
+      });
+      return;
+    }
+
+    if (feature === 'flashcard' && (!studyGuide?.flashcards || studyGuide.flashcards.length === 0)) {
+      handleCustomGenerate('flashcards', {
+        topic: "Tổng hợp toàn bộ kiến thức",
+        language: "Tiếng Việt",
+        quantity: 20
+      });
+      return;
+    }
+
+    if (feature === 'mindmap' && (!studyGuide?.mindmap)) {
+      handleCustomGenerate('mindmap', {
+        topic: "Tổng hợp toàn bộ kiến thức"
+      });
+      return;
+    }
+
+    if (feature === 'podcast' && (!audioUrl)) {
+      handleCustomGenerate('podcast', {
+        topic: "Tóm tắt nhanh kiến thức chính (khoảng 2 phút)",
+        language: "Tiếng Việt"
+      });
+      return;
+    }
+    
+    // Nếu đã có dữ liệu thì chỉ việc hiển thị
+    setActiveFeature(feature);
+  };
+
+
   const handleKeyDown = (e) => {
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault();
@@ -349,11 +471,54 @@ function Studio() {
     }
   };
 
+  const handleCustomGenerate = async (type, config) => {
+    try {
+      setConfigModal(null);
+      alert(`Hệ thống đang xử lý tạo ${type === 'flashcards' ? 'thẻ ghi nhớ' : type} tùy chỉnh. Vui lòng đợi...`);
+      const res = await fetch(`/api/notebooks/${activeNotebook.id}/${type}/custom`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(config)
+      });
+      if (res.ok) {
+        const data = await res.json();
+        const guideRes = await fetch(`/api/notebooks/${activeNotebook.id}/study-guide`);
+        if (guideRes.ok) setStudyGuide(await guideRes.json());
+        
+        if (type === 'podcast' && data.audio_url) {
+          setAudioUrl(data.audio_url);
+        }
+        alert("Tạo thành công!");
+        setActiveFeature(type === 'flashcards' ? 'flashcard' : type);
+      } else {
+        alert("Có lỗi xảy ra khi tạo.");
+      }
+    } catch (e) {
+      console.error(e);
+      alert("Lỗi kết nối.");
+    }
+  };
+
+  if (notebookNotFound) {
+    return (
+      <div className="h-screen w-full flex flex-col items-center justify-center bg-[#131314] text-white">
+        <XCircle size={64} className="text-red-500 mb-4" />
+        <h1 className="text-2xl font-bold mb-2">Sổ tay không tồn tại!</h1>
+        <p className="text-gray-400 mb-6">Sổ tay này đã bị xóa hoặc không còn trên hệ thống.</p>
+        <button 
+          onClick={() => navigate('/dashboard')}
+          className="bg-blue-600 hover:bg-blue-700 text-white px-6 py-2 rounded-lg font-medium transition-colors"
+        >
+          Quay về Trang chủ
+        </button>
+      </div>
+    );
+  }
+
   if (!activeNotebook) return <div className="h-screen w-full flex items-center justify-center bg-[#131314] text-white"><Loader className="animate-spin" size={32} /></div>;
 
   return (
     <div className="h-screen w-full flex bg-[#131314] text-white overflow-hidden font-sans selection:bg-blue-500/30">
-      
       {/* Cột 1: Left Sidebar (Sources) */}
       <div className="w-72 flex-shrink-0 h-full border-r border-white/5 bg-[#131314] flex flex-col p-4 z-10 relative">
         <button onClick={() => navigate('/dashboard')} className="flex items-center gap-2 text-gray-400 hover:text-white mb-8 w-fit transition-colors">
@@ -384,13 +549,29 @@ function Studio() {
                   <div className="flex items-center gap-3 flex-1 min-w-0">
                     <div className="w-10 h-10 rounded-lg bg-blue-500/20 flex items-center justify-center text-blue-400 shrink-0 relative">
                       {doc.filename.includes('http') || doc.filename.includes('YouTube') ? <LinkIcon size={20} /> : <FileText size={20} />}
-                      <div className="absolute -bottom-1 -right-1 bg-green-500 rounded-full text-[#131314] p-0.5">
-                        <Check size={10} strokeWidth={4} />
-                      </div>
+                      {doc.status === 'processing' ? (
+                        <div className="absolute -bottom-1 -right-1 bg-blue-500 rounded-full text-white p-0.5">
+                          <Loader size={10} strokeWidth={4} className="animate-spin" />
+                        </div>
+                      ) : doc.status === 'error' ? (
+                        <div className="absolute -bottom-1 -right-1 bg-red-500 rounded-full text-white p-0.5">
+                          <X size={10} strokeWidth={4} />
+                        </div>
+                      ) : (
+                        <div className="absolute -bottom-1 -right-1 bg-green-500 rounded-full text-[#131314] p-0.5">
+                          <Check size={10} strokeWidth={4} />
+                        </div>
+                      )}
                     </div>
                     <div className="flex-1 min-w-0">
                       <p className="text-sm font-medium truncate text-gray-200" title={doc.filename}>{doc.filename}</p>
-                      <p className="text-xs text-gray-500 truncate">{new Date(doc.created_at).toLocaleString('vi-VN')}</p>
+                      {doc.status === 'processing' ? (
+                        <p className="text-xs text-blue-400 truncate">Đang xử lý dữ liệu...</p>
+                      ) : doc.status === 'error' ? (
+                        <p className="text-xs text-red-500 truncate">Lỗi nạp dữ liệu</p>
+                      ) : (
+                        <p className="text-xs text-gray-500 truncate">{new Date(doc.created_at).toLocaleString('vi-VN')}</p>
+                      )}
                     </div>
                   </div>
                   <button 
@@ -435,6 +616,7 @@ function Studio() {
           </span>
         </div>
         <div className="flex items-center gap-2">
+
           {evalResult && (
             <div className="flex gap-2 text-xs mr-2">
               <span className="bg-green-500/20 text-green-400 px-2 py-1 rounded border border-green-500/30">
@@ -596,197 +778,241 @@ function Studio() {
       </div>
       </div>
 
-      <div className="w-80 lg:w-96 flex-shrink-0 h-full p-4 overflow-y-auto scrollbar-hide bg-[#131314] flex flex-col gap-6 border-l border-white/5">
-        <div className="glass-panel p-5 rounded-2xl border border-white/10">
-          <h3 className="text-lg font-bold text-electric-blue mb-3 flex items-center gap-2">
-            <BookOpen size={20} /> Cẩm Nang Học Tập
-          </h3>
+      <div className="w-80 lg:w-96 flex-shrink-0 h-full p-4 overflow-y-auto scrollbar-hide bg-[#131314] flex flex-col gap-6 border-l border-white/5 relative">
+
+        <div className={`glass-panel p-5 rounded-2xl border transition-all border-white/10`}>
+          <div className="flex justify-between items-center mb-3">
+            <h3 className={`text-lg font-bold flex items-center gap-2 transition-colors text-electric-blue`}>
+              <BookOpen size={20} /> Cẩm Nang Học Tập
+            </h3>
+          </div>
           
-          {documents.length === 0 ? (
-            <div className="text-gray-400 text-sm mt-4 text-center">
-              Vui lòng tải lên tài liệu để tạo Cẩm nang học tập.
-            </div>
-          ) : !studyGuide ? (
-            <div className="flex flex-col items-center justify-center py-6 text-gray-400 gap-3">
-              <Loader className="animate-spin text-electric-blue" size={24} />
-              <span className="text-sm">Đang phân tích tài liệu...</span>
-            </div>
-          ) : (
-            <div className="space-y-4 text-sm mt-4">
-              <div>
-                <h4 className="font-semibold text-gray-300 mb-1">Tóm tắt:</h4>
-                <p className="text-gray-400 leading-relaxed">{studyGuide.summary}</p>
-              </div>
-              <div className="pt-2 border-t border-white/10">
-                <h4 className="font-semibold text-gray-300 mb-1">Câu hỏi thường gặp:</h4>
-                <p className="text-gray-400 whitespace-pre-wrap">{studyGuide.faq}</p>
+          <div className="mt-4">
+              <div className="flex flex-col gap-2 mb-4">
+                <div className="flex border border-white/10 rounded-xl overflow-hidden bg-white/5 transition-all focus-within:ring-1 focus-within:ring-electric-blue">
+                  <button 
+                    onClick={() => handleFeatureClick('quiz')}
+                    className={`flex-1 flex items-center gap-2 p-3 text-left hover:bg-white/10 transition-colors ${activeFeature === 'quiz' ? 'bg-electric-blue/20 text-electric-blue' : 'text-gray-300'}`}
+                  >
+                    <Brain size={18} className="flex-shrink-0" />
+                    <span className="font-semibold text-sm">Bài kiểm tra</span>
+                  </button>
+                  <button onClick={() => setConfigModal('quiz')} className="px-3 hover:bg-white/10 border-l border-white/10 flex items-center justify-center text-gray-400 hover:text-white transition-colors">
+                    <ChevronRight size={18} />
+                  </button>
+                </div>
+
+                <div className="flex border border-white/10 rounded-xl overflow-hidden bg-white/5 transition-all focus-within:ring-1 focus-within:ring-neon-purple">
+                  <button 
+                    onClick={() => handleFeatureClick('flashcard')}
+                    className={`flex-1 flex items-center gap-2 p-3 text-left hover:bg-white/10 transition-colors ${activeFeature === 'flashcard' ? 'bg-neon-purple/20 text-neon-purple' : 'text-gray-300'}`}
+                  >
+                    <Layers size={18} className="flex-shrink-0" />
+                    <span className="font-semibold text-sm">Thẻ ghi nhớ</span>
+                  </button>
+                  <button onClick={() => setConfigModal('flashcard')} className="px-3 hover:bg-white/10 border-l border-white/10 flex items-center justify-center text-gray-400 hover:text-white transition-colors">
+                    <ChevronRight size={18} />
+                  </button>
+                </div>
+
+                <div className="flex border border-white/10 rounded-xl overflow-hidden bg-white/5 transition-all focus-within:ring-1 focus-within:ring-pink-500">
+                  <button 
+                    onClick={() => handleFeatureClick('mindmap')}
+                    className={`flex-1 flex items-center gap-2 p-3 text-left hover:bg-white/10 transition-colors ${activeFeature === 'mindmap' ? 'bg-pink-500/20 text-pink-400' : 'text-gray-300'}`}
+                  >
+                    <Network size={18} className="flex-shrink-0" />
+                    <span className="font-semibold text-sm">Bản đồ tư duy</span>
+                  </button>
+                  <button onClick={() => setConfigModal('mindmap')} className="px-3 hover:bg-white/10 border-l border-white/10 flex items-center justify-center text-gray-400 hover:text-white transition-colors">
+                    <ChevronRight size={18} />
+                  </button>
+                </div>
+
+                <div className="flex border border-white/10 rounded-xl overflow-hidden bg-white/5 transition-all focus-within:ring-1 focus-within:ring-blue-500">
+                  <button 
+                    onClick={() => handleFeatureClick('podcast')}
+                    className={`flex-1 flex items-center gap-2 p-3 text-left hover:bg-white/10 transition-colors ${activeFeature === 'podcast' ? 'bg-blue-500/20 text-blue-400' : 'text-gray-300'}`}
+                  >
+                    <AudioLines size={18} className="flex-shrink-0" />
+                    <span className="font-semibold text-sm">Tổng quan bằng âm thanh</span>
+                  </button>
+                  <button onClick={() => setConfigModal('podcast')} className="px-3 hover:bg-white/10 border-l border-white/10 flex items-center justify-center text-gray-400 hover:text-white transition-colors">
+                    <ChevronRight size={18} />
+                  </button>
+                </div>
               </div>
 
-              <div className="pt-4 flex gap-2 border-t border-white/10">
-                <button 
-                  onClick={() => setShowQuiz(true)}
-                  disabled={!studyGuide.quiz || studyGuide.quiz.length === 0}
-                  className="flex-1 bg-white/5 hover:bg-electric-blue/20 text-electric-blue border border-electric-blue/30 py-2 rounded-xl transition-colors flex items-center justify-center gap-2 disabled:opacity-50"
-                >
-                  <Brain size={16} /> Quiz
-                </button>
-                <button 
-                  onClick={() => { setShowFlashcards(true); setCurrentFlashcard(0); setFlashcardFlipped(false); }}
-                  disabled={!studyGuide.flashcards || studyGuide.flashcards.length === 0}
-                  className="flex-1 bg-white/5 hover:bg-neon-purple/20 text-neon-purple border border-neon-purple/30 py-2 rounded-xl transition-colors flex items-center justify-center gap-2 disabled:opacity-50"
-                >
-                  <Layers size={16} /> Thẻ từ
-                </button>
-              </div>
-            </div>
-          )}
-        </div>
+              {/* Inline Content Areas */}
+              {activeFeature === 'podcast' && (
+                <div className="bg-black/20 p-4 rounded-xl border border-white/5 animate-fade-in">
+                  <h4 className="font-bold text-electric-blue mb-2 text-sm flex items-center gap-2">
+                    <AudioLines size={16} /> Podcast Generator
+                  </h4>
+                  {!audioUrl ? (
+                    <div className="flex flex-col gap-3">
+                      <p className="text-xs text-gray-400">Tạo bản thu âm trò chuyện giữa 2 MC ảo.</p>
+                      
 
-        <div className="glass-panel p-5 rounded-2xl border border-white/10">
-          <h3 className="text-lg font-bold text-neon-purple mb-3 flex items-center gap-2">
-            <Headphones size={20} /> Trò Chuyện AI (Podcast)
-          </h3>
-          
-          {!audioUrl ? (
-            <div className="flex flex-col gap-3">
-              <p className="text-sm text-gray-400">Tạo bản thu âm trò chuyện giữa 2 MC ảo dựa trên tài liệu.</p>
-              <button 
-                onClick={generatePodcast}
-                disabled={podcastGenerating || !studyGuide}
-                className="w-full bg-gradient-to-r from-electric-blue to-neon-purple hover:opacity-90 text-white font-medium py-2 rounded-xl transition-all disabled:opacity-50 flex justify-center items-center gap-2"
-              >
-                {podcastGenerating ? <RefreshCw className="animate-spin" size={18} /> : <Headphones size={18} />}
-                {podcastGenerating ? "Đang tạo (vui lòng đợi)..." : "Tạo Podcast"}
-              </button>
+                      <button 
+                        onClick={generatePodcast}
+                        disabled={podcastGenerating}
+                        className="w-full bg-gradient-to-r from-electric-blue to-neon-purple hover:opacity-90 text-white font-medium py-2 rounded-xl transition-all disabled:opacity-50 flex justify-center items-center gap-2 text-sm"
+                      >
+                        {podcastGenerating ? <RefreshCw className="animate-spin" size={16} /> : <Headphones size={16} />}
+                        {podcastGenerating ? "Đang tạo..." : "Tạo Podcast"}
+                      </button>
+                    </div>
+                  ) : (
+                    <div className="mt-2">
+                      <audio controls className="w-full h-10 rounded outline-none" src={audioUrl} />
+                    </div>
+                  )}
+                </div>
+              )}
+              
+              {activeFeature === 'flashcard' && studyGuide?.flashcards && (
+                <div className="bg-black/20 p-4 rounded-xl border border-white/5 animate-fade-in flex flex-col items-center">
+                  <div className="w-full flex justify-between items-center mb-4 text-sm text-gray-400">
+                    <span>Thẻ {currentFlashcard + 1} / {studyGuide.flashcards.length}</span>
+                  </div>
+                  
+                  <div 
+                    className="relative w-full aspect-[4/3] perspective-1000 cursor-pointer group"
+                    onClick={() => setFlashcardFlipped(!flashcardFlipped)}
+                  >
+                    <div className={`w-full h-full absolute top-0 left-0 transition-all duration-500 transform-style-preserve-3d ${flashcardFlipped ? 'rotate-y-180' : ''}`}>
+                      <div className="absolute w-full h-full backface-hidden bg-white/5 border border-white/10 rounded-xl p-4 flex items-center justify-center text-center shadow-lg group-hover:border-neon-purple/50 transition-colors">
+                        <p className="text-sm font-medium">{studyGuide.flashcards[currentFlashcard].front}</p>
+                      </div>
+                      <div className="absolute w-full h-full backface-hidden bg-neon-purple/10 border border-neon-purple/30 rounded-xl p-4 flex items-center justify-center text-center rotate-y-180 shadow-[0_0_15px_rgba(168,85,247,0.2)]">
+                        <p className="text-sm text-gray-200">{studyGuide.flashcards[currentFlashcard].back}</p>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="flex gap-2 mt-4 w-full">
+                    <button 
+                      onClick={() => { setFlashcardFlipped(false); setCurrentFlashcard(Math.max(0, currentFlashcard - 1)); }}
+                      disabled={currentFlashcard === 0}
+                      className="flex-1 bg-white/5 py-2 rounded-lg text-xs disabled:opacity-30"
+                    >
+                      Trước
+                    </button>
+                    <button 
+                      onClick={() => { setFlashcardFlipped(false); setCurrentFlashcard(Math.min(studyGuide.flashcards.length - 1, currentFlashcard + 1)); }}
+                      disabled={currentFlashcard === studyGuide.flashcards.length - 1}
+                      className="flex-1 bg-white/5 py-2 rounded-lg text-xs disabled:opacity-30"
+                    >
+                      Sau
+                    </button>
+                  </div>
+                </div>
+              )}
+
+              {activeFeature === 'mindmap' && studyGuide?.mindmap && (
+                <div className="bg-black/20 p-4 rounded-xl border border-white/5 animate-fade-in relative">
+                  <h4 className="font-bold text-pink-400 mb-2 text-sm flex items-center gap-2">
+                    <Network size={16} /> Bản đồ tư duy
+                  </h4>
+                  <Mermaid chart={studyGuide.mindmap} />
+                </div>
+              )}
+              
+              {activeFeature === 'quiz' && studyGuide?.quiz && (
+                <div className="bg-black/20 p-4 rounded-xl border border-white/5 animate-fade-in flex flex-col">
+
+                    <div className="space-y-4">
+                      {studyGuide.quiz.map((q, idx) => (
+                        <div key={idx} className="bg-white/5 p-3 rounded-lg border border-white/10">
+                          <p className="font-semibold text-xs mb-2">{idx + 1}. {q.question}</p>
+                          <div className="space-y-1">
+                            {q.options.map((opt, oIdx) => {
+                              const isSelected = quizAnswers[idx] === oIdx;
+                              const isCorrect = q.answer === oIdx;
+                              let btnClass = "w-full text-left p-2 rounded border transition-all text-xs ";
+                              
+                              if (!quizSubmitted) {
+                                btnClass += isSelected ? "border-electric-blue bg-electric-blue/20 text-white" : "border-white/10 hover:bg-white/10 text-gray-400";
+                              } else {
+                                if (isCorrect) btnClass += "border-green-500 bg-green-500/20 text-white";
+                                else if (isSelected && !isCorrect) btnClass += "border-red-500 bg-red-500/20 text-white";
+                                else btnClass += "border-white/5 text-gray-500 opacity-50";
+                              }
+
+                              return (
+                                <button 
+                                  key={oIdx} 
+                                  disabled={quizSubmitted}
+                                  onClick={() => setQuizAnswers({...quizAnswers, [idx]: oIdx})}
+                                  className={btnClass}
+                                >
+                                  {opt}
+                                </button>
+                              );
+                            })}
+                          </div>
+                        </div>
+                      ))}
+                      {!quizSubmitted ? (
+                        <button 
+                          onClick={() => setQuizSubmitted(true)}
+                          disabled={Object.keys(quizAnswers).length !== studyGuide.quiz.length}
+                          className="bg-electric-blue text-white px-4 py-2 rounded-lg text-xs w-full disabled:opacity-50"
+                        >
+                          Nộp bài
+                        </button>
+                      ) : (
+                        <button 
+                          onClick={() => {setQuizAnswers({}); setQuizSubmitted(false);}}
+                          className="bg-white/10 text-white px-4 py-2 rounded-lg text-xs w-full"
+                        >
+                          Làm lại
+                        </button>
+                      )}
+                    </div>
+                </div>
+              )}
+
             </div>
-          ) : (
-             <div className="mt-2">
-               <audio controls className="w-full h-10 rounded outline-none" src={audioUrl} />
-             </div>
-          )}
         </div>
       </div>
 
-      {showQuiz && studyGuide?.quiz && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 animate-fade-in">
-          <div className="glass-panel w-full max-w-2xl max-h-[80vh] flex flex-col rounded-2xl border border-electric-blue/30 overflow-hidden shadow-2xl">
-            <div className="p-4 border-b border-white/10 flex justify-between items-center bg-electric-blue/10">
-              <h2 className="text-xl font-bold flex items-center gap-2"><Brain className="text-electric-blue" /> Trắc nghiệm kiến thức</h2>
-              <button onClick={() => {setShowQuiz(false); setQuizAnswers({}); setQuizSubmitted(false);}} className="text-gray-400 hover:text-white"><X size={24}/></button>
-            </div>
-            <div className="p-6 overflow-y-auto flex-1 space-y-6">
-              {studyGuide.quiz.map((q, idx) => (
-                <div key={idx} className="bg-white/5 p-4 rounded-xl border border-white/10">
-                  <p className="font-semibold text-lg mb-3">{idx + 1}. {q.question}</p>
-                  <div className="space-y-2">
-                    {q.options.map((opt, oIdx) => {
-                      const isSelected = quizAnswers[idx] === oIdx;
-                      const isCorrect = q.answer === oIdx;
-                      let btnClass = "w-full text-left p-3 rounded-lg border transition-all ";
-                      
-                      if (!quizSubmitted) {
-                        btnClass += isSelected ? "border-electric-blue bg-electric-blue/20 text-white" : "border-white/10 hover:bg-white/10 text-gray-300";
-                      } else {
-                        if (isCorrect) btnClass += "border-green-500 bg-green-500/20 text-white";
-                        else if (isSelected && !isCorrect) btnClass += "border-red-500 bg-red-500/20 text-white";
-                        else btnClass += "border-white/5 text-gray-500 opacity-50";
-                      }
-
-                      return (
-                        <button 
-                          key={oIdx} 
-                          disabled={quizSubmitted}
-                          onClick={() => setQuizAnswers({...quizAnswers, [idx]: oIdx})}
-                          className={btnClass}
-                        >
-                          <div className="flex justify-between items-center">
-                            <span>{opt}</span>
-                            {quizSubmitted && isCorrect && <Check size={18} className="text-green-500" />}
-                            {quizSubmitted && isSelected && !isCorrect && <XCircle size={18} className="text-red-500" />}
-                          </div>
-                        </button>
-                      );
-                    })}
-                  </div>
-                </div>
-              ))}
-            </div>
-            <div className="p-4 border-t border-white/10 bg-black/20 flex justify-end">
-              {!quizSubmitted ? (
-                <button 
-                  onClick={() => setQuizSubmitted(true)}
-                  disabled={Object.keys(quizAnswers).length !== studyGuide.quiz.length}
-                  className="bg-electric-blue hover:bg-blue-600 text-white px-6 py-2 rounded-xl font-medium disabled:opacity-50"
-                >
-                  Nộp bài
-                </button>
-              ) : (
-                <button 
-                  onClick={() => {setQuizAnswers({}); setQuizSubmitted(false);}}
-                  className="bg-white/10 hover:bg-white/20 text-white px-6 py-2 rounded-xl font-medium"
-                >
-                  Làm lại
-                </button>
-              )}
-            </div>
-          </div>
-        </div>
+      {configModal === 'quiz' && (
+        <QuizConfigModal 
+          onClose={() => setConfigModal(null)} 
+          onSubmit={(config) => handleCustomGenerate('quiz', config)} 
+        />
+      )}
+      {configModal === 'flashcard' && (
+        <FlashcardConfigModal 
+          onClose={() => setConfigModal(null)} 
+          onSubmit={(config) => handleCustomGenerate('flashcards', config)} 
+        />
+      )}
+      {configModal === 'podcast' && (
+        <PodcastConfigModal 
+          onClose={() => setConfigModal(null)} 
+          onSubmit={(config) => handleCustomGenerate('podcast', config)} 
+        />
+      )}
+      {configModal === 'mindmap' && (
+        <MindmapConfigModal 
+          onClose={() => setConfigModal(null)} 
+          onSubmit={(config) => handleCustomGenerate('mindmap', config)} 
+        />
       )}
 
-      {showFlashcards && studyGuide?.flashcards && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 animate-fade-in">
-          <div className="w-full max-w-lg flex flex-col items-center">
-            <div className="w-full flex justify-end mb-4">
-               <button onClick={() => setShowFlashcards(false)} className="text-gray-400 hover:text-white bg-black/50 p-2 rounded-full backdrop-blur-md"><X size={24}/></button>
-            </div>
-            
-            <div 
-              className="w-full h-80 relative perspective-1000 cursor-pointer" 
-              onClick={() => setFlashcardFlipped(!flashcardFlipped)}
-            >
-              <div className={`w-full h-full absolute transition-transform duration-500 transform-style-3d ${flashcardFlipped ? 'rotate-y-180' : ''}`}>
-                {/* Front */}
-                <div className="absolute inset-0 backface-hidden glass-panel border border-neon-purple/30 rounded-2xl flex items-center justify-center p-8 text-center shadow-[0_0_30px_rgba(168,85,247,0.2)]">
-                  <div>
-                    <div className="text-neon-purple/50 text-sm font-bold tracking-widest uppercase mb-4">Khái niệm</div>
-                    <h2 className="text-3xl font-bold text-white">{studyGuide.flashcards[currentFlashcard].front}</h2>
-                    <div className="text-gray-500 text-xs mt-8 absolute bottom-4 left-0 w-full text-center">Chạm để lật mặt sau</div>
-                  </div>
-                </div>
-                {/* Back */}
-                <div className="absolute inset-0 backface-hidden glass-panel border border-electric-blue/30 rounded-2xl flex items-center justify-center p-8 text-center rotate-y-180 shadow-[0_0_30px_rgba(37,99,235,0.2)] bg-gradient-to-br from-black/80 to-electric-blue/10">
-                  <div>
-                    <div className="text-electric-blue/50 text-sm font-bold tracking-widest uppercase mb-4">Định nghĩa</div>
-                    <p className="text-lg text-gray-200 leading-relaxed">{studyGuide.flashcards[currentFlashcard].back}</p>
-                    <div className="text-gray-500 text-xs mt-8 absolute bottom-4 left-0 w-full text-center">Chạm để quay lại</div>
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            {/* Controls */}
-            <div className="mt-8 flex items-center gap-6">
-              <button 
-                onClick={() => {setCurrentFlashcard(Math.max(0, currentFlashcard - 1)); setFlashcardFlipped(false);}}
-                disabled={currentFlashcard === 0}
-                className="bg-white/10 hover:bg-white/20 p-3 rounded-full disabled:opacity-30 transition-colors"
-              >
-                <ChevronRight size={24} className="rotate-180" />
-              </button>
-              <span className="font-mono text-gray-400">
-                {currentFlashcard + 1} / {studyGuide.flashcards.length}
-              </span>
-              <button 
-                onClick={() => {setCurrentFlashcard(Math.min(studyGuide.flashcards.length - 1, currentFlashcard + 1)); setFlashcardFlipped(false);}}
-                disabled={currentFlashcard === studyGuide.flashcards.length - 1}
-                className="bg-white/10 hover:bg-white/20 p-3 rounded-full disabled:opacity-30 transition-colors"
-              >
-                <ChevronRight size={24} />
-              </button>
-            </div>
-
-          </div>
-        </div>
+      {modelModalConfig && (
+        <ModelSelectionModal
+          isOpen={true}
+          onClose={() => setModelModalConfig(null)}
+          type={modelModalConfig.type}
+          fileToUpload={modelModalConfig.fileToUpload}
+          onSuccess={(file) => {
+            setModelModalConfig(null);
+            proceedWithUpload(file);
+          }}
+        />
       )}
 
     </div>
