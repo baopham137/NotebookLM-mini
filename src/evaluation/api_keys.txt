@@ -1,0 +1,2 @@
+# Google AI Studio API Keys
+# Keys moved to .env

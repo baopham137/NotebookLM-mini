@@ -102,7 +102,9 @@ class LLMEngine:
             prompt += "\n"
             
         prompt += (
-            f"Dựa KHÔNG CHỈ vào trí nhớ mà HÃY DỰA VÀO thông tin trên và ngữ cảnh trò chuyện, hãy trả lời câu hỏi sau một cách chi tiết và chính xác nhất. Nếu tài liệu không có thông tin, hãy nói rõ là tài liệu không đề cập.\n"
+            f"Dựa KHÔNG CHỈ vào trí nhớ mà HÃY DỰA VÀO thông tin trên và ngữ cảnh trò chuyện, hãy trả lời câu hỏi sau một cách chi tiết và chính xác nhất.\n"
+            f"QUAN TRỌNG: Bạn PHẢI trả lời hoàn toàn bằng Tiếng Việt (Vietnamese). KHÔNG sử dụng ngôn ngữ khác.\n"
+            f"Nếu tài liệu không có thông tin, hãy nói rõ là tài liệu không đề cập (bằng Tiếng Việt).\n"
             f"Câu hỏi mới: {query}"
         )
         return prompt

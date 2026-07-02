@@ -10,6 +10,7 @@ from ..utils.config import settings
 
 logger = logging.getLogger(__name__)
 
+@lru_cache(maxsize=1)
 def load_cross_encoder():
     """Lazy-load the Cross-Encoder model."""
     try:

@@ -130,3 +130,30 @@
 {"timestamp": "2026-06-25T02:57:56.486063", "level": "INFO", "module": "telemetry", "message": "chat_stream stream completed in 1844ms", "event": "chat_stream", "latency_ms": 1844}
 {"timestamp": "2026-06-25T02:58:08.457128", "level": "INFO", "module": "telemetry", "message": "chat_stream stream completed in 2146ms", "event": "chat_stream", "latency_ms": 2146}
 {"timestamp": "2026-06-25T02:58:29.600249", "level": "INFO", "module": "telemetry", "message": "chat_stream stream completed in 2570ms", "event": "chat_stream", "latency_ms": 2570}
+{"timestamp": "2026-06-30T10:07:33.716113", "level": "INFO", "module": "telemetry", "message": "chat_stream stream completed in 492ms", "event": "chat_stream", "latency_ms": 492}
+{"timestamp": "2026-06-30T10:07:50.423033", "level": "INFO", "module": "telemetry", "message": "chat_stream stream completed in 5753ms", "event": "chat_stream", "latency_ms": 5753}
+{"timestamp": "2026-06-30T10:17:57.761012", "level": "INFO", "module": "telemetry", "message": "chat_stream stream completed in 2027ms", "event": "chat_stream", "latency_ms": 2027}
+{"timestamp": "2026-06-30T10:18:08.089855", "level": "INFO", "module": "telemetry", "message": "chat_stream stream completed in 2021ms", "event": "chat_stream", "latency_ms": 2021}
+{"timestamp": "2026-06-30T10:18:18.896465", "level": "INFO", "module": "telemetry", "message": "chat_stream stream completed in 2022ms", "event": "chat_stream", "latency_ms": 2022}
+{"timestamp": "2026-06-30T10:18:30.132152", "level": "INFO", "module": "telemetry", "message": "chat_stream stream completed in 2043ms", "event": "chat_stream", "latency_ms": 2043}
+{"timestamp": "2026-06-30T10:18:39.588605", "level": "INFO", "module": "telemetry", "message": "chat_stream stream completed in 2039ms", "event": "chat_stream", "latency_ms": 2039}
+{"timestamp": "2026-06-30T10:18:50.196027", "level": "INFO", "module": "telemetry", "message": "chat_stream stream completed in 2035ms", "event": "chat_stream", "latency_ms": 2035}
+{"timestamp": "2026-06-30T10:19:01.932376", "level": "INFO", "module": "telemetry", "message": "chat_stream stream completed in 2061ms", "event": "chat_stream", "latency_ms": 2061}
+{"timestamp": "2026-06-30T10:19:12.337467", "level": "INFO", "module": "telemetry", "message": "chat_stream stream completed in 2031ms", "event": "chat_stream", "latency_ms": 2031}
+{"timestamp": "2026-06-30T10:19:25.363420", "level": "INFO", "module": "telemetry", "message": "chat_stream stream completed in 2027ms", "event": "chat_stream", "latency_ms": 2027}
+{"timestamp": "2026-06-30T16:31:53.526188", "level": "INFO", "module": "telemetry", "message": "ingest_file completed in 1ms", "event": "ingest_file", "latency_ms": 1}
+{"timestamp": "2026-06-30T16:32:03.042193", "level": "INFO", "module": "telemetry", "message": "chat_stream stream completed in 3188ms", "event": "chat_stream", "latency_ms": 3188}
+{"timestamp": "2026-06-30T16:32:07.228557", "level": "INFO", "module": "telemetry", "message": "chat_stream stream completed in 4185ms", "event": "chat_stream", "latency_ms": 4185}
+{"timestamp": "2026-06-30T16:32:16.108556", "level": "INFO", "module": "telemetry", "message": "chat_stream stream completed in 8878ms", "event": "chat_stream", "latency_ms": 8878}
+{"timestamp": "2026-06-30T16:32:16.380465", "level": "INFO", "module": "telemetry", "message": "chat_stream stream completed in 6124ms", "event": "chat_stream", "latency_ms": 6124}
+{"timestamp": "2026-06-30T16:32:22.121337", "level": "INFO", "module": "telemetry", "message": "chat_stream stream completed in 6011ms", "event": "chat_stream", "latency_ms": 6011}
+{"timestamp": "2026-06-30T16:32:27.241795", "level": "INFO", "module": "telemetry", "message": "chat_stream stream completed in 5119ms", "event": "chat_stream", "latency_ms": 5119}
+{"timestamp": "2026-06-30T16:32:31.753707", "level": "INFO", "module": "telemetry", "message": "chat_stream stream completed in 5828ms", "event": "chat_stream", "latency_ms": 5828}
+{"timestamp": "2026-07-01T14:34:06.046567", "level": "INFO", "module": "telemetry", "message": "ingest_file completed in 1ms", "event": "ingest_file", "latency_ms": 1}
+{"timestamp": "2026-07-01T14:35:31.038570", "level": "INFO", "module": "telemetry", "message": "chat_stream stream completed in 12306ms", "event": "chat_stream", "latency_ms": 12306}
+{"timestamp": "2026-07-01T14:35:38.063602", "level": "INFO", "module": "telemetry", "message": "chat_stream stream completed in 7024ms", "event": "chat_stream", "latency_ms": 7024}
+{"timestamp": "2026-07-01T14:35:38.530289", "level": "INFO", "module": "telemetry", "message": "chat_stream stream completed in 1389ms", "event": "chat_stream", "latency_ms": 1389}
+{"timestamp": "2026-07-01T14:35:45.998840", "level": "INFO", "module": "telemetry", "message": "chat_stream stream completed in 7934ms", "event": "chat_stream", "latency_ms": 7934}
+{"timestamp": "2026-07-01T14:35:53.619381", "level": "INFO", "module": "telemetry", "message": "chat_stream stream completed in 7619ms", "event": "chat_stream", "latency_ms": 7619}
+{"timestamp": "2026-07-01T14:36:06.554354", "level": "INFO", "module": "telemetry", "message": "chat_stream stream completed in 13200ms", "event": "chat_stream", "latency_ms": 13200}
+{"timestamp": "2026-07-01T14:36:10.128689", "level": "INFO", "module": "telemetry", "message": "chat_stream stream completed in 16508ms", "event": "chat_stream", "latency_ms": 16508}
